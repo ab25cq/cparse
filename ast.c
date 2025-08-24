@@ -301,7 +301,8 @@ AstNode* ast_expr_cast_new(const char* type_name, AstNode* expr)
     e->kind = AST_EXPR_CAST;
     e->type_name = type_name ? sdup(type_name) : NULL;
     e->expr = expr;
-    parse_type_details(type_name, &e->q);
+    /* parse qualifiers and other details from the duplicated type string */
+    parse_type_details(e->type_name, &e->q);
     ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
