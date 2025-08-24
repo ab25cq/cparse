@@ -11,7 +11,7 @@ make clean
 git add .
 git commit 
 git remote set-url origin git@github.com:ab25cq/cparse.git
-git push --force origin master
+git push --force main master
 
 
 
