@@ -1047,7 +1047,9 @@ void ast_print(const AstNode* n, int indent)
     case AST_EXPR_CAST: {
         typedef struct { AstKind kind; char* type_name; AstNode* expr; AstQuals q; } AstExprCast;
         const AstExprCast* e = (const AstExprCast*)n;
-        print_indent(indent); printf("Cast(%s)\n", e->type_name?e->type_name:"<type>");
+        char tbuf[256];
+        const char* t = prettify_type(e->type_name ? e->type_name : "<type>", tbuf, sizeof(tbuf));
+        print_indent(indent); printf("Cast(%s)\n", t);
         print_indent(indent+2); printf("quals: const_=%d volatile_=%d restrict_=%d uniq_=%d pointer_num=%d fp_=%d ptr_heap=%d ptr_no_dtor=%d ptr_no_heap=%d\n",
                 e->q.const_, e->q.volatile_, e->q.restrict_, e->q.uniq_, e->q.pointer_num, e->q.fp_, e->q.ptr_heap, e->q.ptr_no_dtor, e->q.ptr_no_heap);
         print_indent(indent+2); printf("typeinfo: signed=%d unsigned=%d short=%d long=%d long_long=%d void=%d char=%d int=%d float=%d double=%d struct=%d union=%d enum=%d array_dims=%d int_bits=%d\n",
