@@ -345,70 +345,7 @@ star_list
   ;
 
 external_declaration
-  : func_decl_specs type_specifier star_list_opt IDENTIFIER ';'
-    {
-      const char* qs = ($1 && $1[0]) ? $1 : NULL;
-      size_t nt = (qs?strlen(qs)+1:0) + strlen($2) + strlen($3 ? $3 : "") + 1;
-      char* t = (char*)malloc(nt);
-      if(t) { t[0]='\0'; if(qs){ strcat(t, $1); strcat(t, " "); } strcat(t, $2); if($3) strcat(t, $3); }
-      AstNode* d = ast_decl_new(t ? t : $2, $4, NULL);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
-      free(t); free($1); free($2); free($3);
-      ast_add(d);
-    }
-  | type_specifier star_list_opt IDENTIFIER ';'
-    {
-      size_t nt = strlen($1) + strlen($2 ? $2 : "") + 1;
-      char* t = (char*)malloc(nt);
-      if(t) { t[0]='\0'; strcat(t, $1); if($2) strcat(t, $2); }
-      AstNode* d = ast_decl_new(t ? t : $1, $3, NULL);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
-      free(t); free($1); free($2);
-      ast_add(d);
-    }
-  | func_decl_specs type_specifier star_list_opt IDENTIFIER '=' initializer ';'
-    {
-      const char* qs = ($1 && $1[0]) ? $1 : NULL;
-      size_t nt = (qs?strlen(qs)+1:0) + strlen($2) + strlen($3 ? $3 : "") + 1;
-      char* t = (char*)malloc(nt);
-      if(t) { t[0]='\0'; if(qs){ strcat(t, $1); strcat(t, " "); } strcat(t, $2); if($3) strcat(t, $3); }
-      AstNode* d = ast_decl_new(t ? t : $2, $4, $6);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
-      free(t); free($1); free($2); free($3);
-      ast_add(d);
-    }
-  | type_specifier star_list_opt IDENTIFIER '=' initializer ';'
-    {
-      size_t nt = strlen($1) + strlen($2 ? $2 : "") + 1;
-      char* t = (char*)malloc(nt);
-      if(t) { t[0]='\0'; strcat(t, $1); if($2) strcat(t, $2); }
-      AstNode* d = ast_decl_new(t ? t : $1, $3, $5);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
-      free(t); free($1); free($2);
-      ast_add(d);
-    }
-  | func_decl_specs type_specifier star_list_opt IDENTIFIER array_dims '=' initializer ';'
-    {
-      const char* qs = ($1 && $1[0]) ? $1 : NULL;
-      size_t nt = (qs?strlen(qs)+1:0) + strlen($2) + strlen($3 ? $3 : "") + strlen($5 ? $5 : "") + 1;
-      char* t = (char*)malloc(nt);
-      if(t) { t[0]='\0'; if(qs){ strcat(t, $1); strcat(t, " "); } strcat(t, $2); if($3) strcat(t, $3); if($5) strcat(t, $5); }
-      AstNode* d = ast_decl_new(t ? t : $2, $4, $7);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
-      free(t); free($1); free($2); free($3); free($5);
-      ast_add(d);
-    }
-  | type_specifier star_list_opt IDENTIFIER array_dims '=' initializer ';'
-    {
-      size_t nt = strlen($1) + strlen($2 ? $2 : "") + strlen($4 ? $4 : "") + 1;
-      char* t = (char*)malloc(nt);
-      if(t) { t[0]='\0'; strcat(t, $1); if($2) strcat(t, $2); if($4) strcat(t, $4); }
-      AstNode* d = ast_decl_new(t ? t : $1, $3, $6);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
-      free(t); free($1); free($2); free($4);
-      ast_add(d);
-    }
-  | func_decl_specs type_specifier sdecl ',' sdecl sdecl_list ';'
+  : type_qualifier_seq_opt type_specifier sdecl ',' sdecl sdecl_list ';'
     {
       const char* qs = ($1 && $1[0]) ? $1 : NULL;
       char* base = qs ? sjoin3($1, " ", $2) : sdup0x($2);
@@ -429,7 +366,7 @@ external_declaration
       if(A){ g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(base);
     }
-  | func_decl_specs type_specifier sdecl '=' initializer ';'
+  | type_qualifier_seq_opt type_specifier sdecl '=' initializer ';'
     {
       const char* qs = ($1 && $1[0]) ? $1 : NULL;
       char* base = qs ? sjoin3($1, " ", $2) : sdup0x($2);
@@ -671,6 +608,69 @@ external_declaration
       typedef_add($6);
     }
   
+  | type_qualifier_seq_opt type_specifier star_list_opt IDENTIFIER ';'
+    {
+      const char* qs = ($1 && $1[0]) ? $1 : NULL;
+      size_t nt = (qs?strlen(qs)+1:0) + strlen($2) + strlen($3 ? $3 : "") + 1;
+      char* t = (char*)malloc(nt);
+      if(t) { t[0]='\0'; if(qs){ strcat(t, $1); strcat(t, " "); } strcat(t, $2); if($3) strcat(t, $3); }
+      AstNode* d = ast_decl_new(t ? t : $2, $4, NULL);
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      free(t); free($1); free($2); free($3);
+      ast_add(d);
+    }
+  | type_specifier star_list_opt IDENTIFIER ';'
+    {
+      size_t nt = strlen($1) + strlen($2 ? $2 : "") + 1;
+      char* t = (char*)malloc(nt);
+      if(t) { t[0]='\0'; strcat(t, $1); if($2) strcat(t, $2); }
+      AstNode* d = ast_decl_new(t ? t : $1, $3, NULL);
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      free(t); free($1); free($2);
+      ast_add(d);
+    }
+  | type_qualifier_seq_opt type_specifier star_list_opt IDENTIFIER '=' initializer ';'
+    {
+      const char* qs = ($1 && $1[0]) ? $1 : NULL;
+      size_t nt = (qs?strlen(qs)+1:0) + strlen($2) + strlen($3 ? $3 : "") + 1;
+      char* t = (char*)malloc(nt);
+      if(t) { t[0]='\0'; if(qs){ strcat(t, $1); strcat(t, " "); } strcat(t, $2); if($3) strcat(t, $3); }
+      AstNode* d = ast_decl_new(t ? t : $2, $4, $6);
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      free(t); free($1); free($2); free($3);
+      ast_add(d);
+    }
+  | type_specifier star_list_opt IDENTIFIER '=' initializer ';'
+    {
+      size_t nt = strlen($1) + strlen($2 ? $2 : "") + 1;
+      char* t = (char*)malloc(nt);
+      if(t) { t[0]='\0'; strcat(t, $1); if($2) strcat(t, $2); }
+      AstNode* d = ast_decl_new(t ? t : $1, $3, $5);
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      free(t); free($1); free($2);
+      ast_add(d);
+    }
+  | type_qualifier_seq_opt type_specifier star_list_opt IDENTIFIER array_dims '=' initializer ';'
+    {
+      const char* qs = ($1 && $1[0]) ? $1 : NULL;
+      size_t nt = (qs?strlen(qs)+1:0) + strlen($2) + strlen($3 ? $3 : "") + strlen($5 ? $5 : "") + 1;
+      char* t = (char*)malloc(nt);
+      if(t) { t[0]='\0'; if(qs){ strcat(t, $1); strcat(t, " "); } strcat(t, $2); if($3) strcat(t, $3); if($5) strcat(t, $5); }
+      AstNode* d = ast_decl_new(t ? t : $2, $4, $7);
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      free(t); free($1); free($2); free($3); free($5);
+      ast_add(d);
+    }
+  | type_specifier star_list_opt IDENTIFIER array_dims '=' initializer ';'
+    {
+      size_t nt = strlen($1) + strlen($2 ? $2 : "") + strlen($4 ? $4 : "") + 1;
+      char* t = (char*)malloc(nt);
+      if(t) { t[0]='\0'; strcat(t, $1); if($2) strcat(t, $2); if($4) strcat(t, $4); }
+      AstNode* d = ast_decl_new(t ? t : $1, $3, $6);
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      free(t); free($1); free($2); free($4);
+      ast_add(d);
+    }
   | function_definition
   | struct_or_union_specifier ';'      { free($1); if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); } g_last_anon_type=NULL; g_last_anon_is_anon=0; }
   | enum_specifier ';'                 { free($1); if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); } g_last_anon_type=NULL; g_last_anon_is_anon=0; }
@@ -1431,17 +1431,10 @@ unary_expression
 /* optional sequence of type qualifiers as a string (e.g., "const volatile") */
 type_qualifier_seq_opt
   : /* empty */                      { $$ = strdup(""); }
-/*
   | type_qualifier_seq_opt KW_CONST  { $$ = sappend($1, ($1 && $1[0])?" const":"const"); }
   | type_qualifier_seq_opt KW_VOLATILE { $$ = sappend($1, ($1 && $1[0])?" volatile":"volatile"); }
   | type_qualifier_seq_opt KW_RESTRICT { $$ = sappend($1, ($1 && $1[0])?" restrict":"restrict"); }
   | type_qualifier_seq_opt KW_UNIQ   { $$ = sappend($1, ($1 && $1[0])?" uniq":"uniq"); }
-*/
-  
-  | KW_CONST type_qualifier_seq_opt { $$ = sappend($2, ($2 && $2[0])?" const":"const"); }
-  | KW_VOLATILE type_qualifier_seq_opt { $$ = sappend($2, ($2 && $2[0])?" volatile":"volatile"); }
-  | KW_RESTRICT type_qualifier_seq_opt { $$ = sappend($2, ($2 && $2[0])?" restrict":"restrict"); }
-  | KW_UNIQ type_qualifier_seq_opt { $$ = sappend($2, ($2 && $2[0])?" uniq":"uniq"); }
   ;
 
 postfix_expression
