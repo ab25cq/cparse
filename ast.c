@@ -214,7 +214,7 @@ AstFunction* ast_function_new(const char* name, const char* return_type, int fla
 
 AstNode* ast_return_new(AstNode* expr)
 {
-    typedef struct AstReturn { AstKind kind; AstNode* expr; } AstReturn;
+    typedef struct AstReturn { AstKind kind; int lineno; char* filename; AstNode* expr; } AstReturn;
     AstReturn* r = (AstReturn*)calloc(1, sizeof(AstReturn));
     if(!r) return NULL;
     r->kind = AST_RETURN;
@@ -236,7 +236,7 @@ AstNode* ast_expr_int_new(long value)
 
 AstNode* ast_expr_call_new(AstNode* callee, AstNode** args, long argc)
 {
-    typedef struct AstExprCall { AstKind kind; AstNode* callee; AstNode** args; long argc; } AstExprCall;
+    typedef struct AstExprCall { AstKind kind; int lineno; char* filename; AstNode* callee; AstNode** args; long argc; } AstExprCall;
     AstExprCall* e = (AstExprCall*)calloc(1, sizeof(AstExprCall));
     if(!e) return NULL;
     e->kind = AST_EXPR_CALL;
@@ -249,7 +249,7 @@ AstNode* ast_expr_call_new(AstNode* callee, AstNode** args, long argc)
 
 AstNode* ast_expr_assign_new(const char* op, AstNode* lhs, AstNode* rhs)
 {
-    typedef struct AstExprAssign { AstKind kind; char* op; AstNode* lhs; AstNode* rhs; } AstExprAssign;
+    typedef struct AstExprAssign { AstKind kind; int lineno; char* filename; char* op; AstNode* lhs; AstNode* rhs; } AstExprAssign;
     AstExprAssign* e = (AstExprAssign*)calloc(1, sizeof(AstExprAssign));
     if(!e) return NULL;
     e->kind = AST_EXPR_ASSIGN;
@@ -262,7 +262,7 @@ AstNode* ast_expr_assign_new(const char* op, AstNode* lhs, AstNode* rhs)
 
 AstNode* ast_expr_float_new(double value)
 {
-    typedef struct AstExprFloat { AstKind kind; double value; } AstExprFloat;
+    typedef struct AstExprFloat { AstKind kind; int lineno; char* filename; double value; } AstExprFloat;
     AstExprFloat* e = (AstExprFloat*)calloc(1, sizeof(AstExprFloat));
     if(!e) return NULL;
     e->kind = AST_EXPR_FLOAT;
@@ -273,7 +273,7 @@ AstNode* ast_expr_float_new(double value)
 
 AstNode* ast_expr_char_new(const char* text)
 {
-    typedef struct AstExprChar { AstKind kind; char* text; } AstExprChar;
+    typedef struct AstExprChar { AstKind kind; int lineno; char* filename; char* text; } AstExprChar;
     AstExprChar* e = (AstExprChar*)calloc(1, sizeof(AstExprChar));
     if(!e) return NULL;
     e->kind = AST_EXPR_CHAR;
@@ -284,7 +284,7 @@ AstNode* ast_expr_char_new(const char* text)
 
 AstNode* ast_expr_string_new(const char* text)
 {
-    typedef struct AstExprString { AstKind kind; char* text; } AstExprString;
+    typedef struct AstExprString { AstKind kind; int lineno; char* filename; char* text; } AstExprString;
     AstExprString* e = (AstExprString*)calloc(1, sizeof(AstExprString));
     if(!e) return NULL;
     e->kind = AST_EXPR_STRING;
@@ -295,7 +295,7 @@ AstNode* ast_expr_string_new(const char* text)
 
 AstNode* ast_expr_cast_new(const char* type_name, AstNode* expr)
 {
-    typedef struct AstExprCast { AstKind kind; char* type_name; AstNode* expr; AstQuals q; } AstExprCast;
+    typedef struct AstExprCast { AstKind kind; int lineno; char* filename; char* type_name; AstNode* expr; AstQuals q; } AstExprCast;
     AstExprCast* e = (AstExprCast*)calloc(1, sizeof(AstExprCast));
     if(!e) return NULL;
     e->kind = AST_EXPR_CAST;
@@ -309,7 +309,7 @@ AstNode* ast_expr_cast_new(const char* type_name, AstNode* expr)
 
 AstNode* ast_expr_cond_new(AstNode* cond, AstNode* then_e, AstNode* else_e)
 {
-    typedef struct AstExprCond { AstKind kind; AstNode* cond; AstNode* then_e; AstNode* else_e; } AstExprCond;
+    typedef struct AstExprCond { AstKind kind; int lineno; char* filename; AstNode* cond; AstNode* then_e; AstNode* else_e; } AstExprCond;
     AstExprCond* e = (AstExprCond*)calloc(1, sizeof(AstExprCond));
     if(!e) return NULL;
     e->kind = AST_EXPR_COND;
@@ -491,18 +491,19 @@ AstNode* ast_init_desig_chain_new(AstNode** elems, long count, AstNode* value)
 
 AstNode* ast_expr_index_new(AstNode* arr, AstNode* index)
 {
-    typedef struct AstExprIndex { AstKind kind; AstNode* arr; AstNode* index; } AstExprIndex;
+    typedef struct AstExprIndex { AstKind kind; int lineno; char* filename; AstNode* arr; AstNode* index; } AstExprIndex;
     AstExprIndex* e = (AstExprIndex*)calloc(1, sizeof(AstExprIndex));
     if(!e) return NULL;
     e->kind = AST_EXPR_INDEX;
     e->arr = arr;
     e->index = index;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
 AstNode* ast_expr_member_new(AstNode* recv, const char* name, int is_arrow)
 {
-    typedef struct AstExprMember { AstKind kind; AstNode* recv; char* name; int is_arrow; } AstExprMember;
+    typedef struct AstExprMember { AstKind kind; int lineno; char* filename; AstNode* recv; char* name; int is_arrow; } AstExprMember;
     AstExprMember* e = (AstExprMember*)calloc(1, sizeof(AstExprMember));
     if(!e) return NULL;
     e->kind = AST_EXPR_MEMBER;
@@ -515,7 +516,7 @@ AstNode* ast_expr_member_new(AstNode* recv, const char* name, int is_arrow)
 
 AstNode* ast_expr_binary_new(const char* op, AstNode* lhs, AstNode* rhs)
 {
-    typedef struct AstExprBinary { AstKind kind; char* op; AstNode* lhs; AstNode* rhs; } AstExprBinary;
+    typedef struct AstExprBinary { AstKind kind; int lineno; char* filename; char* op; AstNode* lhs; AstNode* rhs; } AstExprBinary;
     AstExprBinary* e = (AstExprBinary*)calloc(1, sizeof(AstExprBinary));
     if(!e) return NULL;
     e->kind = AST_EXPR_BINARY;
@@ -528,7 +529,7 @@ AstNode* ast_expr_binary_new(const char* op, AstNode* lhs, AstNode* rhs)
 
 AstNode* ast_expr_ident_new(const char* name)
 {
-    typedef struct AstExprIdent { AstKind kind; char* name; } AstExprIdent;
+    typedef struct AstExprIdent { AstKind kind; int lineno; char* filename; char* name; } AstExprIdent;
     AstExprIdent* e = (AstExprIdent*)calloc(1, sizeof(AstExprIdent));
     if(!e) return NULL;
     e->kind = AST_EXPR_IDENT;
@@ -539,7 +540,7 @@ AstNode* ast_expr_ident_new(const char* name)
 
 AstNode* ast_expr_unary_new(const char* op, AstNode* expr, int is_postfix)
 {
-    typedef struct AstExprUnary { AstKind kind; char* op; AstNode* expr; int is_postfix; } AstExprUnary;
+    typedef struct AstExprUnary { AstKind kind; int lineno; char* filename; char* op; AstNode* expr; int is_postfix; } AstExprUnary;
     AstExprUnary* e = (AstExprUnary*)calloc(1, sizeof(AstExprUnary));
     if(!e) return NULL;
     e->kind = AST_EXPR_UNARY;
@@ -614,36 +615,36 @@ static AstNode* clone_expr_const(const AstNode* n)
         return ast_expr_int_new(e->value);
     }
     case AST_EXPR_CHAR: {
-        typedef struct { AstKind kind; char* text; } AstExprChar;
+        typedef struct { AstKind kind; int lineno; char* filename; char* text; } AstExprChar;
         const AstExprChar* e = (const AstExprChar*)n;
         return ast_expr_char_new(e->text ? e->text : "");
     }
     case AST_EXPR_IDENT: {
-        typedef struct { AstKind kind; char* name; } AstExprIdent;
+        typedef struct { AstKind kind; int lineno; char* filename; char* name; } AstExprIdent;
         const AstExprIdent* e = (const AstExprIdent*)n;
         return ast_expr_ident_new(e->name ? e->name : "");
     }
     case AST_EXPR_UNARY: {
-        typedef struct { AstKind kind; char* op; AstNode* expr; int is_postfix; } AstExprUnary;
+        typedef struct { AstKind kind; int lineno; char* filename; char* op; AstNode* expr; int is_postfix; } AstExprUnary;
         const AstExprUnary* e = (const AstExprUnary*)n;
         AstNode* sub = clone_expr_const(e->expr);
         return ast_expr_unary_new(e->op ? e->op : "", sub, e->is_postfix);
     }
     case AST_EXPR_BINARY: {
-        typedef struct { AstKind kind; char* op; AstNode* lhs; AstNode* rhs; } AstExprBinary;
+        typedef struct { AstKind kind; int lineno; char* filename; char* op; AstNode* lhs; AstNode* rhs; } AstExprBinary;
         const AstExprBinary* e = (const AstExprBinary*)n;
         AstNode* lhs = clone_expr_const(e->lhs);
         AstNode* rhs = clone_expr_const(e->rhs);
         return ast_expr_binary_new(e->op ? e->op : "", lhs, rhs);
     }
     case AST_EXPR_CAST: {
-        typedef struct { AstKind kind; char* type_name; AstNode* expr; } AstExprCast;
+        typedef struct { AstKind kind; int lineno; char* filename; char* type_name; AstNode* expr; AstQuals q; } AstExprCast;
         const AstExprCast* e = (const AstExprCast*)n;
         AstNode* sub = clone_expr_const(e->expr);
         return ast_expr_cast_new(e->type_name ? e->type_name : "", sub);
     }
     case AST_EXPR_COND: {
-        typedef struct { AstKind kind; AstNode* cond; AstNode* then_e; AstNode* else_e; } AstExprCond;
+        typedef struct { AstKind kind; int lineno; char* filename; AstNode* cond; AstNode* then_e; AstNode* else_e; } AstExprCond;
         const AstExprCond* e = (const AstExprCond*)n;
         AstNode* c = clone_expr_const(e->cond);
         AstNode* t = clone_expr_const(e->then_e);
@@ -901,13 +902,9 @@ void ast_print(const AstNode* n, int indent)
         break; }
     case AST_RETURN: {
         print_indent(indent); printf("Return (line %d)\n", n->lineno);
-        const AstNode* expr = ((const AstNode* const*)((const char*)n + sizeof(AstKind)))[0];
-        /* safer: cast to known struct layout */
-        {
-            typedef struct { AstKind kind; AstNode* expr; } AstReturn;
-            const AstReturn* r = (const AstReturn*)n;
-            if(r->expr) ast_print(r->expr, indent+2);
-        }
+        typedef struct { AstKind kind; int lineno; char* filename; AstNode* expr; } AstReturn;
+        const AstReturn* r = (const AstReturn*)n;
+        if(r->expr) ast_print(r->expr, indent+2);
         break; }
     case AST_EXPR_INT: {
         typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprInt;
@@ -915,14 +912,14 @@ void ast_print(const AstNode* n, int indent)
         print_indent(indent); printf("Int(%ld) (line %d)\n", e->value, n->lineno);
         break; }
     case AST_EXPR_BINARY: {
-        typedef struct { AstKind kind; char* op; AstNode* lhs; AstNode* rhs; } AstExprBinary;
+        typedef struct { AstKind kind; int lineno; char* filename; char* op; AstNode* lhs; AstNode* rhs; } AstExprBinary;
         const AstExprBinary* e = (const AstExprBinary*)n;
         print_indent(indent); printf("Binary(op=%s) (line %d)\n", e->op ? e->op : "?", n->lineno);
         if(e->lhs) ast_print(e->lhs, indent+2);
         if(e->rhs) ast_print(e->rhs, indent+2);
         break; }
     case AST_EXPR_IDENT: {
-        typedef struct { AstKind kind; char* name; } AstExprIdent;
+        typedef struct { AstKind kind; int lineno; char* filename; char* name; } AstExprIdent;
         const AstExprIdent* e = (const AstExprIdent*)n;
         print_indent(indent); printf("Ident(%s) (line %d)\n", e->name ? e->name : "<anon>", n->lineno);
         break; }
@@ -944,13 +941,13 @@ void ast_print(const AstNode* n, int indent)
         if(d->init) { print_indent(indent+2); printf("init:\n"); ast_print(d->init, indent+4); }
         break; }
     case AST_EXPR_UNARY: {
-        typedef struct { AstKind kind; char* op; AstNode* expr; int is_postfix; } AstExprUnary;
+        typedef struct { AstKind kind; int lineno; char* filename; char* op; AstNode* expr; int is_postfix; } AstExprUnary;
         const AstExprUnary* e = (const AstExprUnary*)n;
         print_indent(indent); printf("Unary(%s%s)\n", e->is_postfix?"post":"pre", e->op?e->op:"");
         if(e->expr) ast_print(e->expr, indent+2);
         break; }
     case AST_EXPR_CALL: {
-        typedef struct { AstKind kind; AstNode* callee; AstNode** args; long argc; } AstExprCall;
+        typedef struct { AstKind kind; int lineno; char* filename; AstNode* callee; AstNode** args; long argc; } AstExprCall;
         const AstExprCall* e = (const AstExprCall*)n;
         print_indent(indent); printf("Call(argc=%ld)\n", e->argc);
         if(e->callee) { print_indent(indent+2); printf("callee:\n"); ast_print(e->callee, indent+4); }
@@ -960,7 +957,7 @@ void ast_print(const AstNode* n, int indent)
         }
         break; }
     case AST_EXPR_COND: {
-        typedef struct { AstKind kind; AstNode* cond; AstNode* then_e; AstNode* else_e; } AstExprCond;
+        typedef struct { AstKind kind; int lineno; char* filename; AstNode* cond; AstNode* then_e; AstNode* else_e; } AstExprCond;
         const AstExprCond* e = (const AstExprCond*)n;
         print_indent(indent); printf("Cond\n");
         if(e->cond){ print_indent(indent+2); printf("cond:\n"); ast_print(e->cond, indent+4);} 
@@ -968,14 +965,14 @@ void ast_print(const AstNode* n, int indent)
         if(e->else_e){ print_indent(indent+2); printf("else:\n"); ast_print(e->else_e, indent+4);} 
         break; }
     case AST_EXPR_INDEX: {
-        typedef struct { AstKind kind; AstNode* arr; AstNode* index; } AstExprIndex;
+        typedef struct { AstKind kind; int lineno; char* filename; AstNode* arr; AstNode* index; } AstExprIndex;
         const AstExprIndex* e = (const AstExprIndex*)n;
         print_indent(indent); printf("Index\n");
         if(e->arr) ast_print(e->arr, indent+2);
         if(e->index) ast_print(e->index, indent+2);
         break; }
     case AST_EXPR_MEMBER: {
-        typedef struct { AstKind kind; AstNode* recv; char* name; int is_arrow; } AstExprMember;
+        typedef struct { AstKind kind; int lineno; char* filename; AstNode* recv; char* name; int is_arrow; } AstExprMember;
         const AstExprMember* e = (const AstExprMember*)n;
         print_indent(indent); printf("Member(%s%s) (line %d)\n", e->is_arrow?"->":".", e->name?e->name:"<anon>", n->lineno);
         if(e->recv) ast_print(e->recv, indent+2);
@@ -1026,29 +1023,29 @@ void ast_print(const AstNode* n, int indent)
         if(c->value) { print_indent(indent+2); printf("value:\n"); ast_print(c->value, indent+4); }
         break; }
     case AST_EXPR_ASSIGN: {
-        typedef struct { AstKind kind; char* op; AstNode* lhs; AstNode* rhs; } AstExprAssign;
+        typedef struct { AstKind kind; int lineno; char* filename; char* op; AstNode* lhs; AstNode* rhs; } AstExprAssign;
         const AstExprAssign* e = (const AstExprAssign*)n;
         print_indent(indent); printf("Assign(op=%s) (line %d)\n", e->op?e->op:"=", n->lineno);
         if(e->lhs) ast_print(e->lhs, indent+2);
         if(e->rhs) ast_print(e->rhs, indent+2);
         break; }
     case AST_EXPR_FLOAT: {
-        typedef struct { AstKind kind; double value; } AstExprFloat;
+        typedef struct { AstKind kind; int lineno; char* filename; double value; } AstExprFloat;
         const AstExprFloat* e = (const AstExprFloat*)n;
         print_indent(indent); printf("Float(%g)\n", e->value);
         break; }
     case AST_EXPR_CHAR: {
-        typedef struct { AstKind kind; char* text; } AstExprChar;
+        typedef struct { AstKind kind; int lineno; char* filename; char* text; } AstExprChar;
         const AstExprChar* e = (const AstExprChar*)n;
         print_indent(indent); printf("Char(%s)\n", e->text?e->text:"''");
         break; }
     case AST_EXPR_STRING: {
-        typedef struct { AstKind kind; char* text; } AstExprString;
+        typedef struct { AstKind kind; int lineno; char* filename; char* text; } AstExprString;
         const AstExprString* e = (const AstExprString*)n;
         print_indent(indent); printf("String(%s)\n", e->text?e->text:"\"\"");
         break; }
     case AST_EXPR_CAST: {
-        typedef struct { AstKind kind; char* type_name; AstNode* expr; AstQuals q; } AstExprCast;
+        typedef struct { AstKind kind; int lineno; char* filename; char* type_name; AstNode* expr; AstQuals q; } AstExprCast;
         const AstExprCast* e = (const AstExprCast*)n;
         char tbuf[256];
         const char* t = prettify_type(e->type_name ? e->type_name : "<type>", tbuf, sizeof(tbuf));
@@ -1586,65 +1583,73 @@ static void ast_free_node(AstNode* n) {
         free(c);
         break; }
     case AST_RETURN: {
-        typedef struct AstReturn { AstKind kind; AstNode* expr; } AstReturn;
+        typedef struct AstReturn { AstKind kind; int lineno; char* filename; AstNode* expr; } AstReturn;
         AstReturn* r = (AstReturn*)n;
         if(r->expr) ast_free_node(r->expr);
+        free(r->filename);
         free(r);
         break; }
     case AST_EXPR_INT: {
         free(n);
         break; }
     case AST_EXPR_BINARY: {
-        typedef struct AstExprBinary { AstKind kind; char* op; AstNode* lhs; AstNode* rhs; } AstExprBinary;
+        typedef struct AstExprBinary { AstKind kind; int lineno; char* filename; char* op; AstNode* lhs; AstNode* rhs; } AstExprBinary;
         AstExprBinary* e = (AstExprBinary*)n;
         if(e->lhs) ast_free_node(e->lhs);
         if(e->rhs) ast_free_node(e->rhs);
         free(e->op);
+        free(e->filename);
         free(e);
         break; }
     case AST_EXPR_IDENT: {
-        typedef struct AstExprIdent { AstKind kind; char* name; } AstExprIdent;
+        typedef struct AstExprIdent { AstKind kind; int lineno; char* filename; char* name; } AstExprIdent;
         AstExprIdent* e = (AstExprIdent*)n;
         free(e->name);
+        free(e->filename);
         free(e);
         break; }
     case AST_EXPR_UNARY: {
-        typedef struct AstExprUnary { AstKind kind; char* op; AstNode* expr; int is_postfix; } AstExprUnary;
+        typedef struct AstExprUnary { AstKind kind; int lineno; char* filename; char* op; AstNode* expr; int is_postfix; } AstExprUnary;
         AstExprUnary* e = (AstExprUnary*)n;
         if(e->expr) ast_free_node(e->expr);
         free(e->op);
+        free(e->filename);
         free(e);
         break; }
     case AST_EXPR_CALL: {
-        typedef struct AstExprCall { AstKind kind; AstNode* callee; AstNode** args; long argc; } AstExprCall;
+        typedef struct AstExprCall { AstKind kind; int lineno; char* filename; AstNode* callee; AstNode** args; long argc; } AstExprCall;
         AstExprCall* e = (AstExprCall*)n;
         if(e->callee) ast_free_node(e->callee);
         if(e->args) {
             for(long i=0;i<e->argc;i++) if(e->args[i]) ast_free_node(e->args[i]);
             free(e->args);
         }
+        free(e->filename);
         free(e);
         break; }
     case AST_EXPR_INDEX: {
-        typedef struct AstExprIndex { AstKind kind; AstNode* arr; AstNode* index; } AstExprIndex;
+        typedef struct AstExprIndex { AstKind kind; int lineno; char* filename; AstNode* arr; AstNode* index; } AstExprIndex;
         AstExprIndex* e = (AstExprIndex*)n;
         if(e->arr) ast_free_node(e->arr);
         if(e->index) ast_free_node(e->index);
+        free(e->filename);
         free(e);
         break; }
     case AST_EXPR_COND: {
-        typedef struct AstExprCond { AstKind kind; AstNode* cond; AstNode* then_e; AstNode* else_e; } AstExprCond;
+        typedef struct AstExprCond { AstKind kind; int lineno; char* filename; AstNode* cond; AstNode* then_e; AstNode* else_e; } AstExprCond;
         AstExprCond* e = (AstExprCond*)n;
         if(e->cond) ast_free_node(e->cond);
         if(e->then_e) ast_free_node(e->then_e);
         if(e->else_e) ast_free_node(e->else_e);
+        free(e->filename);
         free(e);
         break; }
     case AST_EXPR_MEMBER: {
-        typedef struct AstExprMember { AstKind kind; AstNode* recv; char* name; int is_arrow; } AstExprMember;
+        typedef struct AstExprMember { AstKind kind; int lineno; char* filename; AstNode* recv; char* name; int is_arrow; } AstExprMember;
         AstExprMember* e = (AstExprMember*)n;
         if(e->recv) ast_free_node(e->recv);
         free(e->name);
+        free(e->filename);
         free(e);
         break; }
     case AST_INIT_LIST: {
@@ -1694,26 +1699,40 @@ static void ast_free_node(AstNode* n) {
         free(c);
         break; }
     case AST_EXPR_ASSIGN: {
-        typedef struct AstExprAssign { AstKind kind; char* op; AstNode* lhs; AstNode* rhs; } AstExprAssign;
+        typedef struct AstExprAssign { AstKind kind; int lineno; char* filename; char* op; AstNode* lhs; AstNode* rhs; } AstExprAssign;
         AstExprAssign* e = (AstExprAssign*)n;
         if(e->lhs) ast_free_node(e->lhs);
         if(e->rhs) ast_free_node(e->rhs);
         free(e->op);
+        free(e->filename);
         free(e);
         break; }
     case AST_EXPR_FLOAT: {
-        free(n);
+        typedef struct { AstKind kind; int lineno; char* filename; double value; } AstExprFloat;
+        AstExprFloat* e = (AstExprFloat*)n;
+        free(e->filename);
+        free(e);
         break; }
     case AST_EXPR_CHAR: {
-        typedef struct AstExprChar { AstKind kind; char* text; } AstExprChar;
+        typedef struct AstExprChar { AstKind kind; int lineno; char* filename; char* text; } AstExprChar;
         AstExprChar* e = (AstExprChar*)n;
         free(e->text);
+        free(e->filename);
         free(e);
         break; }
     case AST_EXPR_STRING: {
-        typedef struct AstExprString { AstKind kind; char* text; } AstExprString;
+        typedef struct AstExprString { AstKind kind; int lineno; char* filename; char* text; } AstExprString;
         AstExprString* e = (AstExprString*)n;
         free(e->text);
+        free(e->filename);
+        free(e);
+        break; }
+    case AST_EXPR_CAST: {
+        typedef struct AstExprCast { AstKind kind; int lineno; char* filename; char* type_name; AstNode* expr; AstQuals q; } AstExprCast;
+        AstExprCast* e = (AstExprCast*)n;
+        if(e->expr) ast_free_node(e->expr);
+        free(e->type_name);
+        free(e->filename);
         free(e);
         break; }
     case AST_TYPEDEF: {
