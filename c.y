@@ -1559,8 +1559,9 @@ unary_expression
         strcat(t, $3);
         if($4) strcat(t, $4);
       }
-      $$ = ast_expr_cast_new(t ? t : $3, $6);
-      free(t); free($2); free($3); free($4);
+      AstNode* cast = ast_expr_cast_new(t ? t : $3, $6);
+      free($2); free($3); free($4); free(t);
+      $$ = cast;
     }
   ;
 
