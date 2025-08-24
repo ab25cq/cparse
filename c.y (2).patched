@@ -201,9 +201,6 @@ static void el_push(EnumList* l, const char* name, struct AstNode* value){
 static EnumList* el_merge(EnumList* a, EnumList* b){ if(!a) return b; if(!b) return a; for(long i=0;i<b->n;i++){ el_push(a, b->a[i].name, b->a[i].value); free(b->a[i].name); /* value owned by a now */ } free(b->a); free(b); return a; }
 static void el_free_shallow(EnumList* l){ if(!l) return; if(l->a){ for(long i=0;i<l->n;i++){ free(l->a[i].name); /* value freed by owner */ } free(l->a);} free(l); }
 
-
-/* helper for building multi-declarator ASTs */
-static char* g_decl_base = NULL;
 %}
 
 //%define parse.trace true
@@ -268,8 +265,7 @@ FLOAT_CONSTANT CHAR_CONSTANT type_specifier type_unit star_list star_list_opt ar
 %type <plist> parameter_type_list_opt parameter_type_list parameter_list parameter_declaration
 %type <sval> type_specifier type_unit star_list star_list_opt enum_specifier array_dims type_qualifier_seq_opt specifier_qualifier_list
 %type <elist> enumerator_list_opt enumerator_list enumerator
-%type <sval> fp_param_list_opt fp_param_list fp_param fp_simple_param_list
-%type <fspec> func_decl_specs
+%type <sval> fp_param_list_opt fp_param_list fp_param
 %type <node> compound_statement
 %type <node> statement jump_statement expression_statement
 %type <node> expression assignment_expression conditional_expression logical_or_expression logical_and_expression inclusive_or_expression exclusive_or_expression and_expression equality_expression relational_expression shift_expression additive_expression multiplicative_expression unary_expression postfix_expression primary_expression constant_expression
@@ -292,32 +288,11 @@ FLOAT_CONSTANT CHAR_CONSTANT type_specifier type_unit star_list star_list_opt ar
 
 %start translation_unit
 
-
 %%
 
 translation_unit
   : /* empty */
   | translation_unit external_declaration
-  ;
-
-/* list of simple declarators for top-level declarations; actions create AST nodes immediately using g_decl_base */
-decl_sdecl_list
-  : sdecl
-    {
-      char* t = compose_type(g_decl_base, $1);
-      AstNode* d = ast_decl_new(t ? t : g_decl_base, $1->name, NULL);
-      ast_add(d);
-      if(t) free(t);
-      dstr_free($1);
-    }
-  | decl_sdecl_list ',' sdecl
-    {
-      char* t = compose_type(g_decl_base, $3);
-      AstNode* d = ast_decl_new(t ? t : g_decl_base, $3->name, NULL);
-      ast_add(d);
-      if(t) free(t);
-      dstr_free($3);
-    }
   ;
 
 /* Optional version annotation: "version <int>" */
@@ -369,16 +344,7 @@ star_list
   ;
 
 external_declaration
-  :  | type_qualifier_seq_opt type_specifier
-    {
-      const char* qs = ($1 && $1[0]) ? $1 : NULL;
-      g_decl_base = qs ? sjoin3($1, " ", $2) : sdup0x($2);
-      free($1); free($2);
-    }
-    decl_sdecl_list ';'
-    { if(g_decl_base){ free(g_decl_base); g_decl_base=NULL; } }
-  declaration
-  | type_qualifier_seq_opt type_specifier star_list_opt IDENTIFIER ';'
+  : type_qualifier_seq_opt type_specifier star_list_opt IDENTIFIER ';'
     {
       const char* qs = ($1 && $1[0]) ? $1 : NULL;
       size_t nt = (qs?strlen(qs)+1:0) + strlen($2) + strlen($3 ? $3 : "") + 1;
@@ -397,14 +363,6 @@ external_declaration
       AstNode* d = ast_decl_new(t ? t : $1, $3, NULL);
       if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); free($1); free($2);
-      ast_add(d);
-    }
-  | func_decl_specs IDENTIFIER ';'
-    {
-      AstNode* d = ast_decl_new($1 && $1->rtype ? $1->rtype : "int", $2, NULL);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
-      free($2); 
-      if($1){ free($1->rtype); free($1);}
       ast_add(d);
     }
   | /* removed ambiguous multi-decl form to avoid conflicts with function definitions */
@@ -547,30 +505,6 @@ external_declaration
       free($2);
       if($5) { free($5); }
     }
-  | func_decl_specs IDENTIFIER '(' parameter_type_list_opt ')' version_opt compound_statement
-    {
-      AstFunction* f = ast_function_new($2,
-        $1 && $1->rtype ? $1->rtype : NULL,
-        $1 ? $1->flags : 0,
-        $4 ? $4->a : NULL,
-        $4 ? $4->n : 0,
-        $6,
-        $7);
-      ast_add((AstNode*)f);
-      if($1){ free($1->rtype); free($1);} if($4) free($4);
-    }
-  | func_decl_specs IDENTIFIER '(' parameter_type_list_opt ')' version_opt ';'
-    {
-      AstFunction* f = ast_function_new($2,
-        $1 && $1->rtype ? $1->rtype : NULL,
-        $1 ? $1->flags : 0,
-        $4 ? $4->a : NULL,
-        $4 ? $4->n : 0,
-        $6,
-        NULL);
-      ast_add((AstNode*)f);
-      if($1){ free($1->rtype); free($1);} if($4) free($4);
-    }
   | KW_TYPEDEF type_qualifier_seq_opt type_specifier star_list_opt IDENTIFIER ';'
     {
       const char* qs = ($2 && $2[0]) ? $2 : NULL;
@@ -671,6 +605,7 @@ external_declaration
       ast_add(td);
       typedef_add($6);
     }
+  
   | type_qualifier_seq_opt type_specifier sdecl ',' sdecl sdecl_list ';'
     {
       const char* qs = ($1 && $1[0]) ? $1 : NULL;
@@ -711,34 +646,15 @@ external_declaration
       free(t); dstr_free($2); free(base);
       ast_add(d);
     }
-  | type_specifier sdecl ';'
-    {
-      char* base=$1;
-      char* t=compose_type(base,$2);
-      AstNode* d=ast_decl_new(t? t: base, $2->name, NULL);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
-      free(t); dstr_free($2); free(base);
-      ast_add(d);
-    }
   | function_definition
   | struct_or_union_specifier ';'      { free($1); if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); } g_last_anon_type=NULL; g_last_anon_is_anon=0; }
   | enum_specifier ';'                 { free($1); if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); } g_last_anon_type=NULL; g_last_anon_is_anon=0; }
   /* removed generic declaration to force explicit decl rules and avoid conflicts */
+  | declaration
 
   ;
 
 /* Accumulate storage/qualifiers/inline + base type + stars in any order (right-recursive) */
-func_decl_specs
-  : type_specifier star_list_opt              { $$ = fspec_new_from($1, $2); free($1); free($2); }
-  | KW_EXTERN func_decl_specs                 { $$ = $2; if($$) $$->flags |= ASTF_EXTERN; }
-  | KW_STATIC func_decl_specs                 { $$ = $2; if($$) $$->flags |= ASTF_STATIC; }
-  | KW_CONST func_decl_specs                  { $$ = $2; if($$) $$->flags |= ASTF_CONST; }
-  | KW_VOLATILE func_decl_specs               { $$ = $2; if($$) $$->flags |= ASTF_VOLATILE; }
-  | KW_RESTRICT func_decl_specs               { $$ = $2; if($$) $$->flags |= ASTF_RESTRICT; }
-  | KW_INLINE func_decl_specs                 { $$ = $2; if($$) $$->flags |= ASTF_INLINE; }
-  | KW_UNIQ func_decl_specs                   { $$ = $2; if($$) $$->flags |= ASTF_UNIQ; }
-  ;
-
 /* Full C-style parameter lists using declaration_specifiers + smart declarator (sdecl) */
 parameter_type_list_opt
   : /* empty */                     { $$ = NULL; }
@@ -785,7 +701,7 @@ parameter_declaration
 
 /* Declarations */
 declaration
-  : declaration_specifiers init_declarator_list_opt
+  : declaration_specifiers init_declarator_list_opt ';'
   ;
 init_declarator_list_opt
   : /* empty */
@@ -1135,48 +1051,16 @@ identifier_list_opt
 identifier_list
   : IDENTIFIER
   | identifier_list ',' IDENTIFIER
-    { (void)$3; }
   ;
 
 /* For function pointer typedef text-only param list building */
 fp_param_list_opt
   : /* empty */                    { $$ = strdup("()"); }
-  | fp_simple_param_list           {
+  | fp_param_list                  {
       size_t n = strlen($1) + 3;
       char* s = (char*)malloc(n);
       if(s) { s[0]='\0'; strcat(s, "("); strcat(s, $1); strcat(s, ")"); }
       free($1);
-      $$ = s;
-    }
-  ;
-
-fp_simple_param_list
-  : type_specifier star_list_opt {
-      size_t n = strlen($1) + strlen($2 ? $2 : "") + 1;
-      char* s = (char*)malloc(n);
-      if(s) { s[0]='\0'; strcat(s, $1); if($2) strcat(s, $2); }
-      free($1); free($2);
-      $$ = s;
-    }
-  | type_specifier star_list_opt IDENTIFIER {
-      size_t n = strlen($1) + strlen($2 ? $2 : "") + 1;
-      char* s = (char*)malloc(n);
-      if(s) { s[0]='\0'; strcat(s, $1); if($2) strcat(s, $2); }
-      free($1); free($2); free($3);
-      $$ = s;
-    }
-  | fp_simple_param_list ',' type_specifier star_list_opt {
-      size_t n = strlen($1) + 2 + strlen($3) + strlen($4 ? $4 : "") + 1;
-      char* s = (char*)malloc(n);
-      if(s) { strcpy(s, $1); strcat(s, ", "); strcat(s, $3); if($4) strcat(s, $4); }
-      free($1); free($3); free($4);
-      $$ = s;
-    }
-  | fp_simple_param_list ',' type_specifier star_list_opt IDENTIFIER {
-      size_t n = strlen($1) + 2 + strlen($3) + strlen($4 ? $4 : "") + 1;
-      char* s = (char*)malloc(n);
-      if(s) { strcpy(s, $1); strcat(s, ", "); strcat(s, $3); if($4) strcat(s, $4); }
-      free($1); free($3); free($4); free($5);
       $$ = s;
     }
   ;
@@ -1362,27 +1246,7 @@ sdir
   : IDENTIFIER { DStr* d=(DStr*)calloc(1,sizeof(DStr)); d->name=$1; d->pre=strdup(""); d->post=strdup(""); $$=d; }
   | '(' sdecl ')' { $$=$2; }
   | '(' sdecl ')' '(' fp_param_list_opt ')' { char* params=$5?$5:strdup("()"); $2->post=sappend3($2->post, "(*)", params); free($5); $$=$2; }
-  | '(' '*' IDENTIFIER ')' '(' fp_param_list_opt ')' { 
-      char* params=$6?$6:strdup("()"); 
-      DStr* d=(DStr*)calloc(1,sizeof(DStr)); 
-      d->name=$3; 
-      d->pre=strdup(""); 
-      d->post=sappend3(strdup("(*)"), "(", params); 
-      free(params); 
-      $$=d; 
-    }
   | sdir '[' assignment_expression_opt ']' { char* suf=array_suffix_from_expr($3); $1->post=sappend($1->post,suf); free(suf); $$=$1; }
-  | '(' '*' IDENTIFIER '[' assignment_expression_opt ']' ')' '(' fp_param_list_opt ')' { 
-      char* arr=array_suffix_from_expr($5); 
-      char* params=$9?$9:strdup("()"); 
-      DStr* d=(DStr*)calloc(1,sizeof(DStr)); 
-      d->name=$3; 
-      d->pre=strdup(""); 
-      char* ptr_array = sappend(sappend(strdup("(*"), arr), ")");
-      d->post=sappend3(ptr_array, "(", params); 
-      free(arr); free(params); 
-      $$=d; 
-    }
   ;
 
 /* (smart declarators temporarily disabled to avoid conflicts) */
@@ -1532,8 +1396,7 @@ unary_expression
 
 /* optional sequence of type qualifiers as a string (e.g., "const volatile") */
 type_qualifier_seq_opt
-  : /* empty */ { $$ = strdup(""); }
-  | KW_CONST type_qualifier_seq_opt { $$ = sappend($2, ($2 && $2[0])?" const":"const"); }
+  : KW_CONST type_qualifier_seq_opt { $$ = sappend($2, ($2 && $2[0])?" const":"const"); }
   | KW_VOLATILE type_qualifier_seq_opt { $$ = sappend($2, ($2 && $2[0])?" volatile":"volatile"); }
   | KW_RESTRICT type_qualifier_seq_opt { $$ = sappend($2, ($2 && $2[0])?" restrict":"restrict"); }
   | KW_UNIQ type_qualifier_seq_opt { $$ = sappend($2, ($2 && $2[0])?" uniq":"uniq"); }
