@@ -929,7 +929,9 @@ void ast_print(const AstNode* n, int indent)
         typedef struct { AstKind kind; char* type_name; char* name; AstNode* init; AstNode* anon_def; AstQuals q; } AstDecl;
         const AstDecl* d = (const AstDecl*)n;
         print_indent(indent);
-        printf("Decl type=%s name=%s (line %d)\n", d->type_name?d->type_name:"<type>", d->name?d->name:"<anon>", n->lineno);
+        char tbuf[256];
+        const char* tname = prettify_type(d->type_name, tbuf, sizeof(tbuf));
+        printf("Decl type=%s name=%s (line %d)\n", tname, d->name?d->name:"<anon>", n->lineno);
         print_indent(indent+2); printf("quals: const_=%d volatile_=%d restrict_=%d uniq_=%d pointer_num=%d fp_=%d ptr_heap=%d ptr_no_dtor=%d ptr_no_heap=%d\n",
                 d->q.const_, d->q.volatile_, d->q.restrict_, d->q.uniq_, d->q.pointer_num, d->q.fp_, d->q.ptr_heap, d->q.ptr_no_dtor, d->q.ptr_no_heap);
         print_indent(indent+2); printf("typeinfo: signed=%d unsigned=%d short=%d long=%d long_long=%d void=%d char=%d int=%d float=%d double=%d struct=%d union=%d enum=%d array_dims=%d int_bits=%d\n",
