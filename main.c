@@ -15,7 +15,7 @@ static void usage(const char* prog)
 
 int main(int argc, char** argv)
 {
-    yydebug = 1;
+    //yydebug = 1;
     if(argc < 2) {
         usage(argv[0]);
         return 2;
@@ -28,7 +28,10 @@ int main(int argc, char** argv)
     }
     yyin = f;
     yylineno = 1;
+    /* Set initial filename after parse is complete for base file tracking */
     int rc = yyparse();
+    /* Set default filename for nodes that don't have one */
+    // TODO: Better approach needed for initial file tracking
     fclose(f);
     if(rc != 0) {
         fprintf(stderr, "parse failed with code %d\n", rc);

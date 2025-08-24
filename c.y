@@ -23,6 +23,9 @@ extern char* yytext;
 static struct AstNode* g_last_anon_type = NULL;
 static int g_last_anon_is_anon = 0; /* 1 if last was anonymous brace form */
 
+/* Counter for generating unique anonymous type names */
+static long g_anon_counter = 1;
+
 /* Parameter list builder for function params */
 typedef struct ParamList {
   AstParam* a;
@@ -122,7 +125,7 @@ static char* compose_type(const char* base, const DStr* d){
   return sjoin3(base, pre, post);
 }
 static char* array_suffix_from_expr(struct AstNode* e){
-  if(e && e->kind==AST_EXPR_INT){ typedef struct { int kind; long value; } AstExprInt; char buf[64]; snprintf(buf,sizeof(buf),"[%ld]", ((AstExprInt*)e)->value); return strdup(buf); }
+  if(e && e->kind==AST_EXPR_INT){ typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprInt; char buf[64]; snprintf(buf,sizeof(buf),"[%ld]", ((AstExprInt*)e)->value); return strdup(buf); }
   return strdup("[]");
 }
 static char* sappend(char* a, const char* b){ size_t na=a?strlen(a):0, nb=b?strlen(b):0; char* r=(char*)malloc(na+nb+1); if(!r) return a; if(na) memcpy(r,a,na); if(nb) memcpy(r+na,b,nb); r[na+nb]='\0'; free(a); return r; }
@@ -385,7 +388,7 @@ external_declaration
       char* t = (char*)malloc(nt);
       if(t) { t[0]='\0'; if(qs){ strcat(t, $1); strcat(t, " "); } strcat(t, $2); if($3) strcat(t, $3); }
       AstNode* d = ast_decl_new(t ? t : $2, $4, NULL);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); free($1); free($2); free($3);
       ast_add(d);
     }
@@ -395,14 +398,14 @@ external_declaration
       char* t = (char*)malloc(nt);
       if(t) { t[0]='\0'; strcat(t, $1); if($2) strcat(t, $2); }
       AstNode* d = ast_decl_new(t ? t : $1, $3, NULL);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); free($1); free($2);
       ast_add(d);
     }
   | func_decl_specs IDENTIFIER ';'
     {
       AstNode* d = ast_decl_new($1 && $1->rtype ? $1->rtype : "int", $2, NULL);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free($2); 
       if($1){ free($1->rtype); free($1);}
       ast_add(d);
@@ -435,7 +438,7 @@ external_declaration
       char* t = (char*)malloc(nt);
       if(t) { t[0]='\0'; if(qs){ strcat(t, $1); strcat(t, " "); } strcat(t, $2); if($3) strcat(t, $3); }
       AstNode* d = ast_decl_new(t ? t : $2, $4, $6);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); free($1); free($2); free($3);
       ast_add(d);
     }
@@ -445,7 +448,7 @@ external_declaration
       char* t = (char*)malloc(nt);
       if(t) { t[0]='\0'; strcat(t, $1); if($2) strcat(t, $2); }
       AstNode* d = ast_decl_new(t ? t : $1, $3, $5);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); free($1); free($2);
       ast_add(d);
     }
@@ -474,7 +477,7 @@ external_declaration
       char* t = (char*)malloc(nt);
       if(t) { t[0]='\0'; if(qs){ strcat(t, $1); strcat(t, " "); } strcat(t, $2); if($3) strcat(t, $3); }
       AstNode* d = ast_decl_new(t ? t : $2, $4, $6);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); free($1); free($2); free($3);
       ast_add(d);
     }
@@ -484,7 +487,7 @@ external_declaration
       char* t = (char*)malloc(nt);
       if(t) { t[0]='\0'; strcat(t, $1); if($2) strcat(t, $2); }
       AstNode* d = ast_decl_new(t ? t : $1, $3, $5);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); free($1); free($2);
       ast_add(d);
     }
@@ -495,7 +498,7 @@ external_declaration
       char* t = (char*)malloc(nt);
       if(t) { t[0]='\0'; if(qs){ strcat(t, $1); strcat(t, " "); } strcat(t, $2); if($3) strcat(t, $3); if($5) strcat(t, $5); }
       AstNode* d = ast_decl_new(t ? t : $2, $4, $7);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); free($1); free($2); free($3); free($5);
       ast_add(d);
     }
@@ -505,7 +508,7 @@ external_declaration
       char* t = (char*)malloc(nt);
       if(t) { t[0]='\0'; strcat(t, $1); if($2) strcat(t, $2); if($4) strcat(t, $4); }
       AstNode* d = ast_decl_new(t ? t : $1, $3, $6);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); free($1); free($2); free($4);
       ast_add(d);
     }
@@ -677,8 +680,8 @@ external_declaration
       char* base = qs ? sjoin3($1, " ", $2) : sdup0x($2);
       AstNode* A = (g_last_anon_is_anon ? g_last_anon_type : NULL);
       char* t1=compose_type(base,$3); AstNode* d1=ast_decl_new(t1,$3->name,NULL); if(A){ ast_decl_attach_anon(d1, A); } free(t1); dstr_free($3); ast_add(d1);
-      char* t2=compose_type(base,$5); AstNode* d2=ast_decl_new(t2,$5->name,NULL); if(A){ ast_decl_attach_anon(d2, ast_type_clone(A)); } free(t2); dstr_free($5); ast_add(d2);
-      if($6){ for(long i=0;i<$6->n;i++){ DStr* ds=(DStr*)$6->a[i]; char* tx=compose_type(base,ds); AstNode* dn=ast_decl_new(tx, ds->name,NULL); if(A){ ast_decl_attach_anon(dn, ast_type_clone(A)); } free(tx); dstr_free(ds); ast_add(dn);} free($6->a); free($6); }
+      char* t2=compose_type(base,$5); AstNode* d2=ast_decl_new(t2,$5->name,NULL); if(A){ ast_decl_attach_anon(d2, ast_node_clone(A)); } free(t2); dstr_free($5); ast_add(d2);
+      if($6){ for(long i=0;i<$6->n;i++){ DStr* ds=(DStr*)$6->a[i]; char* tx=compose_type(base,ds); AstNode* dn=ast_decl_new(tx, ds->name,NULL); if(A){ ast_decl_attach_anon(dn, ast_node_clone(A)); } free(tx); dstr_free(ds); ast_add(dn);} free($6->a); free($6); }
       if(A){ g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(base); free($1); free($2);
     }
@@ -687,8 +690,8 @@ external_declaration
       char* base=$1;
       AstNode* A = (g_last_anon_is_anon ? g_last_anon_type : NULL);
       char* t1=compose_type(base,$2); AstNode* d1=ast_decl_new(t1,$2->name,NULL); if(A){ ast_decl_attach_anon(d1, A); } free(t1); dstr_free($2); ast_add(d1);
-      char* t2=compose_type(base,$4); AstNode* d2=ast_decl_new(t2,$4->name,NULL); if(A){ ast_decl_attach_anon(d2, ast_type_clone(A)); } free(t2); dstr_free($4); ast_add(d2);
-      if($5){ for(long i=0;i<$5->n;i++){ DStr* ds=(DStr*)$5->a[i]; char* tx=compose_type(base,ds); AstNode* dn=ast_decl_new(tx, ds->name,NULL); if(A){ ast_decl_attach_anon(dn, ast_type_clone(A)); } free(tx); dstr_free(ds); ast_add(dn);} free($5->a); free($5); }
+      char* t2=compose_type(base,$4); AstNode* d2=ast_decl_new(t2,$4->name,NULL); if(A){ ast_decl_attach_anon(d2, ast_node_clone(A)); } free(t2); dstr_free($4); ast_add(d2);
+      if($5){ for(long i=0;i<$5->n;i++){ DStr* ds=(DStr*)$5->a[i]; char* tx=compose_type(base,ds); AstNode* dn=ast_decl_new(tx, ds->name,NULL); if(A){ ast_decl_attach_anon(dn, ast_node_clone(A)); } free(tx); dstr_free(ds); ast_add(dn);} free($5->a); free($5); }
       if(A){ g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(base);
     }
@@ -698,7 +701,7 @@ external_declaration
       char* base = qs ? sjoin3($1, " ", $2) : sdup0x($2);
       char* t=compose_type(base,$3);
       AstNode* d=ast_decl_new(t? t: base, $3->name, $5);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); dstr_free($3); free(base); free($1); free($2);
       ast_add(d);
     }
@@ -707,7 +710,7 @@ external_declaration
       char* base=$1;
       char* t=compose_type(base,$2);
       AstNode* d=ast_decl_new(t? t: base, $2->name, $4);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); dstr_free($2); free(base);
       ast_add(d);
     }
@@ -716,7 +719,7 @@ external_declaration
       char* base=$1;
       char* t=compose_type(base,$2);
       AstNode* d=ast_decl_new(t? t: base, $2->name, NULL);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); dstr_free($2); free(base);
       ast_add(d);
     }
@@ -845,7 +848,14 @@ type_unit
   | KW_DOUBLE    { $$ = strdup("double"); }
   | struct_or_union_specifier { $$ = $1; }
   | KW_STRUCT '{' struct_declaration_list_opt '}'            {
-      $$ = strdup("struct");
+      /* Generate anon_N name for anonymous struct */
+      char anon_name_buf[32];
+      snprintf(anon_name_buf, sizeof(anon_name_buf), "anon_%ld", g_anon_counter++);
+      char* anon_name = strdup(anon_name_buf);
+      char* type_name = (char*)malloc(strlen("struct ") + strlen(anon_name_buf) + 1);
+      strcpy(type_name, "struct ");
+      strcat(type_name, anon_name_buf);
+      $$ = type_name;
       long fc = $3 ? $3->n : 0;
       AstStructField* fs = NULL;
       if(fc > 0){
@@ -858,12 +868,20 @@ type_unit
           free(t);
         }
       }
-      AstNode* st = ast_struct_new_with(NULL, fs, fc);
-      g_last_anon_type = st; g_last_anon_is_anon = 1; /* inline, not global yet */
+      AstNode* st = ast_struct_new_with(anon_name, fs, fc);
+      free(anon_name);
+      g_last_anon_type = st; g_last_anon_is_anon = 1; /* will be added later if not used inline */
       if($3){ sfl_free($3); }
     }
   | KW_UNION  '{' struct_declaration_list_opt '}'            {
-      $$ = strdup("union");
+      /* Generate anon_N name for anonymous union */
+      char anon_name_buf[32];
+      snprintf(anon_name_buf, sizeof(anon_name_buf), "anon_%ld", g_anon_counter++);
+      char* anon_name = strdup(anon_name_buf);
+      char* type_name = (char*)malloc(strlen("union ") + strlen(anon_name_buf) + 1);
+      strcpy(type_name, "union ");
+      strcat(type_name, anon_name_buf);
+      $$ = type_name;
       long fc = $3 ? $3->n : 0;
       AstStructField* fs = NULL;
       if(fc > 0){
@@ -876,8 +894,9 @@ type_unit
           free(t);
         }
       }
-      AstNode* un = ast_union_new_with(NULL, fs, fc);
-      g_last_anon_type = un; g_last_anon_is_anon = 1; /* inline */
+      AstNode* un = ast_union_new_with(anon_name, fs, fc);
+      free(anon_name);
+      g_last_anon_type = un; g_last_anon_is_anon = 1; /* will be added later if not used inline */
       if($3){ sfl_free($3); }
     }
   | KW_STRUCT IDENTIFIER                                     { size_t n=strlen("struct ")+strlen($2)+1; $$=(char*)malloc(n); if($$){ strcpy($$,"struct "); strcat($$,$2);} free($2); }
@@ -949,6 +968,7 @@ struct_or_union_specifier
         }
       }
       AstNode* st = ast_struct_new_with($2, fs, fc);
+      ast_add(st);
       g_last_anon_type = st; g_last_anon_is_anon = 0; /* named */
       free($2);
       if($4){ sfl_free($4); }
@@ -969,6 +989,7 @@ struct_or_union_specifier
         }
       }
       AstNode* un = ast_union_new_with($2, fs, fc);
+      ast_add(un);
       g_last_anon_type = un; g_last_anon_is_anon = 0;
       free($2);
       if($4){ sfl_free($4); }
@@ -1006,7 +1027,7 @@ struct_declaration
         /* 各 declarator エントリに base 型を埋める（複製） */
         f.base = $1 ? strdup($1) : strdup("");
         /* If a nested anon type was just parsed as part of the base, attach it inline */
-        if(g_last_anon_type){ f.anon_def = g_last_anon_type; }
+        if(g_last_anon_type){ f.anon_def = ast_node_clone(g_last_anon_type); }
         sfl_push(out, f);
       }
       /* consume the last anon type for this specifier */
@@ -1050,7 +1071,7 @@ struct_declarator
       /* 無名ビットフィールド（名前なし）。DStr は空名で用意しておく */
       DStr* d = (DStr*)calloc(1,sizeof(DStr));
       d->name = strdup(""); d->pre=strdup(""); d->post=strdup("");
-      int bw = 0; if($2 && ((AstNode*)$2)->kind==AST_EXPR_INT){ typedef struct { AstKind kind; long value; } AstExprInt; bw=(int)((AstExprInt*)$2)->value; }
+      int bw = 0; if($2 && ((AstNode*)$2)->kind==AST_EXPR_INT){ typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprInt; bw=(int)((AstExprInt*)$2)->value; }
       SField f = { .base=NULL, .d=d, .bitwidth=bw, .anon_def=NULL };
       sfl_push(l, f);
       $$ = l;
@@ -1058,7 +1079,12 @@ struct_declarator
   | sdecl ':' constant_expression
     {
       SFieldList* l = sfl_new();
-      int bw = 0; if($3 && ((AstNode*)$3)->kind==AST_EXPR_INT){ typedef struct { AstKind kind; long value; } AstExprInt; bw=(int)((AstExprInt*)$3)->value; }
+      int bw = 0; 
+      if($3 && ((AstNode*)$3)->kind==AST_EXPR_INT) { 
+        // Skip lineno and filename to get to value field  
+        typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprIntFixed; 
+        bw=(int)((AstExprIntFixed*)$3)->value;
+      }
       SField f = { .base=NULL, .d=$1, .bitwidth=bw, .anon_def=NULL };
       sfl_push(l, f);
       $$ = l;
@@ -1077,11 +1103,19 @@ enum_specifier
       if($4){ free($4->a); free($4); }
     }
   | KW_ENUM '{' enumerator_list_opt '}'              {
-      $$ = strdup("enum");
+      /* Generate anon_N name for anonymous enum */
+      char anon_name_buf[32];
+      snprintf(anon_name_buf, sizeof(anon_name_buf), "anon_%ld", g_anon_counter++);
+      char* anon_name = strdup(anon_name_buf);
+      char* type_name = (char*)malloc(strlen("enum ") + strlen(anon_name_buf) + 1);
+      strcpy(type_name, "enum ");
+      strcat(type_name, anon_name_buf);
+      $$ = type_name;
       long cnt = $3 ? $3->n : 0;
       AstEnumItem* items = NULL;
       if(cnt>0){ items=(AstEnumItem*)calloc(cnt, sizeof(*items)); for(long i=0;i<cnt;i++){ items[i] = ast_enum_item_new($3->a[i].name, $3->a[i].value); free($3->a[i].name); } }
-      AstNode* en = ast_enum_new_with(NULL, items, cnt); g_last_anon_type = en; g_last_anon_is_anon = 1;
+      AstNode* en = ast_enum_new_with(anon_name, items, cnt); g_last_anon_type = en; g_last_anon_is_anon = 1;
+      free(anon_name);
       if($3){ free($3->a); free($3); }
     }
   | KW_ENUM IDENTIFIER                               { size_t n=strlen("enum ")+strlen($2)+1; $$=(char*)malloc(n); if($$){ strcpy($$, "enum "); strcat($$, $2);} free($2); }
@@ -1317,8 +1351,8 @@ block_item
       char* base = qs ? sjoin3($1, " ", $2) : sdup0x($2);
       AstNode* A = (g_last_anon_is_anon ? g_last_anon_type : NULL);
       char* t1=compose_type(base,$3); AstNode* d1=ast_decl_new(t1,$3->name,NULL); if(A){ ast_decl_attach_anon(d1, A); } free(t1); dstr_free($3); nlist_push(nl,d1);
-      char* t2=compose_type(base,$5); AstNode* d2=ast_decl_new(t2,$5->name,NULL); if(A){ ast_decl_attach_anon(d2, ast_type_clone(A)); } free(t2); dstr_free($5); nlist_push(nl,d2);
-      if($6){ for(long i=0;i<$6->n;i++){ DStr* ds=(DStr*)$6->a[i]; char* tx=compose_type(base,ds); AstNode* dn=ast_decl_new(tx, ds->name,NULL); if(A){ ast_decl_attach_anon(dn, ast_type_clone(A)); } free(tx); dstr_free(ds); nlist_push(nl,dn);} free($6->a); free($6); }
+      char* t2=compose_type(base,$5); AstNode* d2=ast_decl_new(t2,$5->name,NULL); if(A){ ast_decl_attach_anon(d2, ast_node_clone(A)); } free(t2); dstr_free($5); nlist_push(nl,d2);
+      if($6){ for(long i=0;i<$6->n;i++){ DStr* ds=(DStr*)$6->a[i]; char* tx=compose_type(base,ds); AstNode* dn=ast_decl_new(tx, ds->name,NULL); if(A){ ast_decl_attach_anon(dn, ast_node_clone(A)); } free(tx); dstr_free(ds); nlist_push(nl,dn);} free($6->a); free($6); }
       if(A){ g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(base); free($1); free($2);
       $$=nl;
@@ -1329,7 +1363,7 @@ block_item
       char* base = qs ? sjoin3($1, " ", $2) : sdup0x($2);
       char* t=compose_type(base,$3);
       AstNode* d=ast_decl_new(t? t: base, $3->name, $5);
-      if(g_last_anon_is_anon && g_last_anon_type){ ast_decl_attach_anon(d, g_last_anon_type); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
+      if(g_last_anon_is_anon && g_last_anon_type){ ast_add(g_last_anon_type); ast_decl_attach_anon(d, ast_node_clone(g_last_anon_type)); g_last_anon_type=NULL; g_last_anon_is_anon=0; }
       free(t); dstr_free($3); free(base); free($1); free($2);
       $$ = nlist_from1(d);
     }

@@ -3,11 +3,34 @@
 #include <string.h>
 #include <stdio.h>
 
+/* Access to lexer line number */
+extern int yylineno;
+
+/* Current source filename tracking */
+static char* g_current_filename = NULL;
+
 static char* sdup(const char* s) {
+    if (!s) return NULL;
     size_t n = strlen(s);
     char* r = (char*)malloc(n+1);
     if(r) { memcpy(r, s, n+1); }
     return r;
+}
+
+/* Helper function to set line number and filename on AST nodes */
+static void ast_set_lineno(AstNode* node) {
+    if (node) {
+        node->lineno = yylineno;
+        node->filename = g_current_filename ? sdup(g_current_filename) : NULL;
+    }
+}
+
+/* Set current filename (called from parser when processing #line directives) */
+void ast_set_filename(const char* filename) {
+    if (g_current_filename) {
+        free(g_current_filename);
+    }
+    g_current_filename = filename ? sdup(filename) : NULL;
 }
 
 /* crude type scanner: fills AstQuals from a flattened type string */
@@ -99,6 +122,7 @@ AstNode* ast_struct_new(const char* name) {
     s->name = name ? sdup(name) : NULL;
     s->fields = NULL;
     s->field_count = 0;
+    ast_set_lineno((AstNode*)s);
     return (AstNode*)s;
 }
 
@@ -109,6 +133,7 @@ AstNode* ast_struct_new_with(const char* name, AstStructField* fields, long fiel
     s->name = name ? sdup(name) : NULL;
     s->fields = fields;          /* 所有権を受け取る想定 */
     s->field_count = field_count;
+    ast_set_lineno((AstNode*)s);
     return (AstNode*)s;
 }
 
@@ -128,6 +153,7 @@ AstNode* ast_enum_new(const char* name) {
     e->name = name ? sdup(name) : NULL;
     e->items = NULL;
     e->item_count = 0;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -142,6 +168,7 @@ AstNode* ast_enum_new_with(const char* name, AstEnumItem* items, long item_count
     e->name = name ? sdup(name) : NULL;
     e->items = items;
     e->item_count = item_count;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -152,6 +179,7 @@ AstNode* ast_union_new(const char* name) {
     u->name = name ? sdup(name) : NULL;
     u->fields = NULL;
     u->field_count = 0;
+    ast_set_lineno((AstNode*)u);
     return (AstNode*)u;
 }
 
@@ -162,6 +190,7 @@ AstNode* ast_union_new_with(const char* name, AstStructField* fields, long field
     u->name = name ? sdup(name) : NULL;
     u->fields = fields;
     u->field_count = field_count;
+    ast_set_lineno((AstNode*)u);
     return (AstNode*)u;
 }
 
@@ -179,6 +208,7 @@ AstFunction* ast_function_new(const char* name, const char* return_type, int fla
     f->param_count = param_count;
     f->version = version;
     f->body = body;
+    ast_set_lineno((AstNode*)f);
     return f;
 }
 
@@ -189,16 +219,18 @@ AstNode* ast_return_new(AstNode* expr)
     if(!r) return NULL;
     r->kind = AST_RETURN;
     r->expr = expr;
+    ast_set_lineno((AstNode*)r);
     return (AstNode*)r;
 }
 
 AstNode* ast_expr_int_new(long value)
 {
-    typedef struct AstExprInt { AstKind kind; long value; } AstExprInt;
+    typedef struct AstExprInt { AstKind kind; int lineno; char* filename; long value; } AstExprInt;
     AstExprInt* e = (AstExprInt*)calloc(1, sizeof(AstExprInt));
     if(!e) return NULL;
     e->kind = AST_EXPR_INT;
     e->value = value;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -211,6 +243,7 @@ AstNode* ast_expr_call_new(AstNode* callee, AstNode** args, long argc)
     e->callee = callee;
     e->args = args;
     e->argc = argc;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -223,6 +256,7 @@ AstNode* ast_expr_assign_new(const char* op, AstNode* lhs, AstNode* rhs)
     e->op = op ? sdup(op) : NULL;
     e->lhs = lhs;
     e->rhs = rhs;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -233,6 +267,7 @@ AstNode* ast_expr_float_new(double value)
     if(!e) return NULL;
     e->kind = AST_EXPR_FLOAT;
     e->value = value;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -243,6 +278,7 @@ AstNode* ast_expr_char_new(const char* text)
     if(!e) return NULL;
     e->kind = AST_EXPR_CHAR;
     e->text = text ? sdup(text) : NULL;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -253,6 +289,7 @@ AstNode* ast_expr_string_new(const char* text)
     if(!e) return NULL;
     e->kind = AST_EXPR_STRING;
     e->text = text ? sdup(text) : NULL;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -265,6 +302,7 @@ AstNode* ast_expr_cast_new(const char* type_name, AstNode* expr)
     e->type_name = type_name ? sdup(type_name) : NULL;
     e->expr = expr;
     parse_type_details(type_name, &e->q);
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -277,6 +315,7 @@ AstNode* ast_expr_cond_new(AstNode* cond, AstNode* then_e, AstNode* else_e)
     e->cond = cond;
     e->then_e = then_e;
     e->else_e = else_e;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -304,6 +343,7 @@ AstNode* ast_decl_new(const char* type_name, const char* name, AstNode* init)
     d->init = init;
     d->anon_def = NULL;
     parse_type_details(type_name, &d->q);
+    ast_set_lineno((AstNode*)d);
     return (AstNode*)d;
 }
 
@@ -313,6 +353,63 @@ void ast_decl_attach_anon(struct AstNode* decl, struct AstNode* anon_def)
     typedef struct AstDecl { AstKind kind; char* type_name; char* name; AstNode* init; AstNode* anon_def; } AstDecl;
     AstDecl* d = (AstDecl*)decl;
     d->anon_def = anon_def;
+}
+
+/* Clone functions for AST nodes */
+static AstStructField ast_struct_field_clone(const AstStructField* src) {
+    AstStructField f;
+    f.type_name = src->type_name ? sdup(src->type_name) : NULL;
+    f.name = src->name ? sdup(src->name) : NULL;
+    f.bitwidth = src->bitwidth;
+    f.anon_def = src->anon_def ? ast_node_clone(src->anon_def) : NULL;
+    return f;
+}
+
+AstNode* ast_node_clone(const AstNode* src) {
+    if (!src) return NULL;
+    
+    switch (src->kind) {
+    case AST_STRUCT: {
+        const AstStruct* s = (const AstStruct*)src;
+        AstStructField* cloned_fields = NULL;
+        if (s->field_count > 0) {
+            cloned_fields = (AstStructField*)calloc(s->field_count, sizeof(AstStructField));
+            for (long i = 0; i < s->field_count; i++) {
+                cloned_fields[i] = ast_struct_field_clone(&s->fields[i]);
+            }
+        }
+        return ast_struct_new_with(s->name, cloned_fields, s->field_count);
+    }
+    
+    case AST_UNION: {
+        const AstUnion* u = (const AstUnion*)src;
+        AstStructField* cloned_fields = NULL;
+        if (u->field_count > 0) {
+            cloned_fields = (AstStructField*)calloc(u->field_count, sizeof(AstStructField));
+            for (long i = 0; i < u->field_count; i++) {
+                cloned_fields[i] = ast_struct_field_clone(&u->fields[i]);
+            }
+        }
+        return ast_union_new_with(u->name, cloned_fields, u->field_count);
+    }
+    
+    case AST_ENUM: {
+        const AstEnum* e = (const AstEnum*)src;
+        AstEnumItem* cloned_items = NULL;
+        if (e->item_count > 0) {
+            cloned_items = (AstEnumItem*)calloc(e->item_count, sizeof(AstEnumItem));
+            for (long i = 0; i < e->item_count; i++) {
+                cloned_items[i].name = e->items[i].name ? sdup(e->items[i].name) : NULL;
+                cloned_items[i].value = e->items[i].value ? ast_node_clone(e->items[i].value) : NULL;
+            }
+        }
+        return ast_enum_new_with(e->name, cloned_items, e->item_count);
+    }
+    
+    default:
+        /* For other node types, just return NULL for now */
+        return NULL;
+    }
 }
 
 AstNode* ast_init_list_new(AstNode** items, long count)
@@ -411,6 +508,7 @@ AstNode* ast_expr_member_new(AstNode* recv, const char* name, int is_arrow)
     e->recv = recv;
     e->name = name ? sdup(name) : NULL;
     e->is_arrow = is_arrow ? 1 : 0;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -423,6 +521,7 @@ AstNode* ast_expr_binary_new(const char* op, AstNode* lhs, AstNode* rhs)
     e->op = op ? sdup(op) : NULL;
     e->lhs = lhs;
     e->rhs = rhs;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -433,6 +532,7 @@ AstNode* ast_expr_ident_new(const char* name)
     if(!e) return NULL;
     e->kind = AST_EXPR_IDENT;
     e->name = name ? sdup(name) : NULL;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
@@ -445,11 +545,23 @@ AstNode* ast_expr_unary_new(const char* op, AstNode* expr, int is_postfix)
     e->op = op ? sdup(op) : NULL;
     e->expr = expr;
     e->is_postfix = is_postfix ? 1 : 0;
+    ast_set_lineno((AstNode*)e);
     return (AstNode*)e;
 }
 
 static void print_indent(int n) {
     for(int i=0;i<n;i++) putchar(' ');
+}
+
+/* Helper function to format location information */
+static void print_location(const AstNode* n, char* buf, size_t size) {
+    if (n && n->filename) {
+        snprintf(buf, size, " (%s:%d)", n->filename, n->lineno);
+    } else if (n) {
+        snprintf(buf, size, " (line %d)", n->lineno);
+    } else {
+        buf[0] = '\0';
+    }
 }
 
 /* Pretty-print type names, expanding anonymous struct/union as "struct <anon>"/"union <anon>". */
@@ -496,7 +608,7 @@ static AstNode* clone_expr_const(const AstNode* n)
     if(!n) return NULL;
     switch(n->kind){
     case AST_EXPR_INT: {
-        typedef struct { AstKind kind; long value; } AstExprInt;
+        typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprInt;
         const AstExprInt* e = (const AstExprInt*)n;
         return ast_expr_int_new(e->value);
     }
@@ -597,7 +709,9 @@ void ast_print(const AstNode* n, int indent)
     switch(n->kind) {
     case AST_COMPOUND: {
         const AstCompound* c = (const AstCompound*)n;
-        print_indent(indent); printf("Compound{n=%ld}\n", c->count);
+        print_indent(indent);
+        char loc[128]; print_location(n, loc, sizeof(loc));
+        printf("Compound{n=%ld}%s\n", c->count, loc);
         for(long i=0;i<c->count;i++) {
             ast_print(c->items[i], indent+2);
         }
@@ -606,12 +720,18 @@ void ast_print(const AstNode* n, int indent)
     case AST_STRUCT: {
         const AstStruct* s = (const AstStruct*)n;
         print_indent(indent);
-        printf("Struct name=%s fields=%ld\n", s->name ? s->name : "<anon>", s->field_count);
+        char loc[128]; print_location(n, loc, sizeof(loc));
+        printf("Struct name=%s fields=%ld%s\n", s->name ? s->name : "<anon>", s->field_count, loc);
         for (long i = 0; i < s->field_count; i++) {
             const AstStructField* f = &s->fields[i];
             print_indent(indent+2);
             char tbuf[256];
             const char* tname = prettify_type(f->type_name ? f->type_name : "<type>", tbuf, sizeof(tbuf));
+            
+            /* Parse type qualifiers for detailed information */
+            AstQuals q;
+            parse_type_details(f->type_name, &q);
+            
             if (f->bitwidth > 0) {
                 printf("field type=%s name=%s :%d\n",
                     tname,
@@ -622,6 +742,36 @@ void ast_print(const AstNode* n, int indent)
                     tname,
                     f->name ? f->name : "<anon>");
             }
+            /* Display detailed qualifier and type information */
+            if (q.const_ || q.volatile_ || q.restrict_ || q.uniq_ || q.pointer_num > 0 || 
+                q.ptr_heap > 0 || q.ptr_no_dtor > 0 || q.ptr_no_heap > 0) {
+                print_indent(indent+4);
+                printf("quals: const_=%d volatile_=%d restrict_=%d uniq_=%d pointer_num=%d ptr_heap=%d ptr_no_dtor=%d ptr_no_heap=%d\n",
+                       q.const_, q.volatile_, q.restrict_, q.uniq_, q.pointer_num, q.ptr_heap, q.ptr_no_dtor, q.ptr_no_heap);
+            }
+            
+            /* Display type information if significant */
+            if (q.is_signed || q.is_unsigned || q.is_short || q.long_count > 0 || 
+                q.is_void || q.is_char || q.is_int || q.is_float || q.is_double ||
+                q.is_struct || q.is_union || q.is_enum || q.array_dims > 0) {
+                print_indent(indent+4);
+                printf("typeinfo: signed=%d unsigned=%d short=%d long=%d long_long=%d void=%d char=%d int=%d float=%d double=%d struct=%d union=%d enum=%d array_dims=%d int_bits=%d\n",
+                       q.is_signed, q.is_unsigned, q.is_short, (q.long_count>=1), (q.long_count>=2),
+                       q.is_void, q.is_char, q.is_int, q.is_float, q.is_double,
+                       q.is_struct, q.is_union, q.is_enum, q.array_dims, q.int_bits);
+                
+                /* Display array dimensions if present */
+                if (q.array_dims > 0) {
+                    print_indent(indent+4);
+                    printf("array_sizes=");
+                    for (int j = 0; j < q.array_dims && j < 8; j++) {
+                        if (j) printf(",");
+                        printf("%ld", q.array_size[j]);
+                    }
+                    printf("\n");
+                }
+            }
+            
             if (f->anon_def) {
                 print_indent(indent+4);
                 printf("inline:\n");
@@ -633,7 +783,8 @@ void ast_print(const AstNode* n, int indent)
     case AST_UNION: {
         const AstUnion* u = (const AstUnion*)n;
         print_indent(indent);
-        printf("Union name=%s fields=%ld\n", u->name ? u->name : "<anon>", u->field_count);
+        char loc[128]; print_location(n, loc, sizeof(loc));
+        printf("Union name=%s fields=%ld%s\n", u->name ? u->name : "<anon>", u->field_count, loc);
         for (long i = 0; i < u->field_count; i++) {
             const AstStructField* f = &u->fields[i];
             print_indent(indent+2);
@@ -660,12 +811,13 @@ void ast_print(const AstNode* n, int indent)
     case AST_ENUM: {
         const AstEnum* e = (const AstEnum*)n;
         print_indent(indent);
-        printf("Enum name=%s items=%ld\n", e->name ? e->name : "<anon>", e->item_count);
+        char loc[128]; print_location(n, loc, sizeof(loc));
+        printf("Enum name=%s items=%ld%s\n", e->name ? e->name : "<anon>", e->item_count, loc);
         for (long i = 0; i < e->item_count; i++) {
             const AstEnumItem* it = &e->items[i];
             print_indent(indent+2);
             if (it->value && it->value->kind == AST_EXPR_INT) {
-                typedef struct { AstKind kind; long value; } AstExprInt;
+                typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprInt;
                 long v = ((const AstExprInt*)it->value)->value;
                 printf("%s = %ld\n", it->name ? it->name : "<anon>", v);
             } else if (it->value) {
@@ -694,9 +846,9 @@ void ast_print(const AstNode* n, int indent)
     case AST_FUNCTION: {
         const AstFunction* f = (const AstFunction*)n;
         print_indent(indent);
-        printf("Function rtype=%s name=%s params=%ld\n",
+        printf("Function rtype=%s name=%s params=%ld (line %d)\n",
                f->return_type?f->return_type:"<ret>",
-               f->name?f->name:"<anon>", f->param_count);
+               f->name?f->name:"<anon>", f->param_count, n->lineno);
         if(f->version){
             print_indent(indent+2);
             printf("version=%d\n", f->version);
@@ -747,7 +899,7 @@ void ast_print(const AstNode* n, int indent)
         ast_print(f->body, indent+2);
         break; }
     case AST_RETURN: {
-        print_indent(indent); printf("Return\n");
+        print_indent(indent); printf("Return (line %d)\n", n->lineno);
         const AstNode* expr = ((const AstNode* const*)((const char*)n + sizeof(AstKind)))[0];
         /* safer: cast to known struct layout */
         {
@@ -757,27 +909,27 @@ void ast_print(const AstNode* n, int indent)
         }
         break; }
     case AST_EXPR_INT: {
-        typedef struct { AstKind kind; long value; } AstExprInt;
+        typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprInt;
         const AstExprInt* e = (const AstExprInt*)n;
-        print_indent(indent); printf("Int(%ld)\n", e->value);
+        print_indent(indent); printf("Int(%ld) (line %d)\n", e->value, n->lineno);
         break; }
     case AST_EXPR_BINARY: {
         typedef struct { AstKind kind; char* op; AstNode* lhs; AstNode* rhs; } AstExprBinary;
         const AstExprBinary* e = (const AstExprBinary*)n;
-        print_indent(indent); printf("Binary(op=%s)\n", e->op ? e->op : "?");
+        print_indent(indent); printf("Binary(op=%s) (line %d)\n", e->op ? e->op : "?", n->lineno);
         if(e->lhs) ast_print(e->lhs, indent+2);
         if(e->rhs) ast_print(e->rhs, indent+2);
         break; }
     case AST_EXPR_IDENT: {
         typedef struct { AstKind kind; char* name; } AstExprIdent;
         const AstExprIdent* e = (const AstExprIdent*)n;
-        print_indent(indent); printf("Ident(%s)\n", e->name ? e->name : "<anon>");
+        print_indent(indent); printf("Ident(%s) (line %d)\n", e->name ? e->name : "<anon>", n->lineno);
         break; }
     case AST_DECL: {
         typedef struct { AstKind kind; char* type_name; char* name; AstNode* init; AstNode* anon_def; AstQuals q; } AstDecl;
         const AstDecl* d = (const AstDecl*)n;
         print_indent(indent);
-        printf("Decl type=%s name=%s\n", d->type_name?d->type_name:"<type>", d->name?d->name:"<anon>");
+        printf("Decl type=%s name=%s (line %d)\n", d->type_name?d->type_name:"<type>", d->name?d->name:"<anon>", n->lineno);
         print_indent(indent+2); printf("quals: const_=%d volatile_=%d restrict_=%d uniq_=%d pointer_num=%d fp_=%d ptr_heap=%d ptr_no_dtor=%d ptr_no_heap=%d\n",
                 d->q.const_, d->q.volatile_, d->q.restrict_, d->q.uniq_, d->q.pointer_num, d->q.fp_, d->q.ptr_heap, d->q.ptr_no_dtor, d->q.ptr_no_heap);
         print_indent(indent+2); printf("typeinfo: signed=%d unsigned=%d short=%d long=%d long_long=%d void=%d char=%d int=%d float=%d double=%d struct=%d union=%d enum=%d array_dims=%d int_bits=%d\n",
@@ -822,7 +974,7 @@ void ast_print(const AstNode* n, int indent)
     case AST_EXPR_MEMBER: {
         typedef struct { AstKind kind; AstNode* recv; char* name; int is_arrow; } AstExprMember;
         const AstExprMember* e = (const AstExprMember*)n;
-        print_indent(indent); printf("Member(%s%s)\n", e->is_arrow?"->":".", e->name?e->name:"<anon>");
+        print_indent(indent); printf("Member(%s%s) (line %d)\n", e->is_arrow?"->":".", e->name?e->name:"<anon>", n->lineno);
         if(e->recv) ast_print(e->recv, indent+2);
         break; }
     case AST_INIT_LIST: {
@@ -873,7 +1025,329 @@ void ast_print(const AstNode* n, int indent)
     case AST_EXPR_ASSIGN: {
         typedef struct { AstKind kind; char* op; AstNode* lhs; AstNode* rhs; } AstExprAssign;
         const AstExprAssign* e = (const AstExprAssign*)n;
-        print_indent(indent); printf("Assign(op=%s)\n", e->op?e->op:"=");
+        print_indent(indent); printf("Assign(op=%s) (line %d)\n", e->op?e->op:"=", n->lineno);
+        if(e->lhs) ast_print(e->lhs, indent+2);
+        if(e->rhs) ast_print(e->rhs, indent+2);
+        break; }
+    case AST_EXPR_FLOAT: {
+        typedef struct { AstKind kind; double value; } AstExprFloat;
+        const AstExprFloat* e = (const AstExprFloat*)n;
+        print_indent(indent); printf("Float(%g)\n", e->value);
+        break; }
+    case AST_EXPR_CHAR: {
+        typedef struct { AstKind kind; char* text; } AstExprChar;
+        const AstExprChar* e = (const AstExprChar*)n;
+        print_indent(indent); printf("Char(%s)\n", e->text?e->text:"''");
+        break; }
+    case AST_EXPR_STRING: {
+        typedef struct { AstKind kind; char* text; } AstExprString;
+        const AstExprString* e = (const AstExprString*)n;
+        print_indent(indent); printf("String(%s)\n", e->text?e->text:"\"\"");
+        break; }
+    case AST_EXPR_CAST: {
+        typedef struct { AstKind kind; char* type_name; AstNode* expr; AstQuals q; } AstExprCast;
+        const AstExprCast* e = (const AstExprCast*)n;
+        print_indent(indent); printf("Cast(%s)\n", e->type_name?e->type_name:"<type>");
+        print_indent(indent+2); printf("quals: const_=%d volatile_=%d restrict_=%d uniq_=%d pointer_num=%d fp_=%d ptr_heap=%d ptr_no_dtor=%d ptr_no_heap=%d\n",
+                e->q.const_, e->q.volatile_, e->q.restrict_, e->q.uniq_, e->q.pointer_num, e->q.fp_, e->q.ptr_heap, e->q.ptr_no_dtor, e->q.ptr_no_heap);
+        print_indent(indent+2); printf("typeinfo: signed=%d unsigned=%d short=%d long=%d long_long=%d void=%d char=%d int=%d float=%d double=%d struct=%d union=%d enum=%d array_dims=%d int_bits=%d\n",
+                e->q.is_signed, e->q.is_unsigned, e->q.is_short, (e->q.long_count>=1), (e->q.long_count>=2),
+                e->q.is_void, e->q.is_char, e->q.is_int, e->q.is_float, e->q.is_double,
+                e->q.is_struct, e->q.is_union, e->q.is_enum, e->q.array_dims, e->q.int_bits);
+        if(e->q.array_dims>0){ print_indent(indent+2); printf("array_sizes="); for(int i=0;i<e->q.array_dims && i<8;i++){ if(i) printf(","); printf("%ld", e->q.array_size[i]); } printf("\n"); }
+        if(e->expr) ast_print(e->expr, indent+2);
+        break; }
+    default:
+        print_indent(indent); printf("<unknown kind %d>\n", (int)n->kind);
+        break;
+    }
+}
+
+void ast_compile(const AstNode* n, int indent)
+{
+    if(!n) { print_indent(indent); printf("(null)\n"); return; }
+    switch(n->kind) {
+    case AST_COMPOUND: {
+        const AstCompound* c = (const AstCompound*)n;
+        print_indent(indent); printf("Compound{n=%ld}\n", c->count);
+        for(long i=0;i<c->count;i++) {
+            ast_print(c->items[i], indent+2);
+        }
+        break; }
+
+    case AST_STRUCT: {
+        const AstStruct* s = (const AstStruct*)n;
+        print_indent(indent);
+        printf("Struct name=%s fields=%ld\n", s->name ? s->name : "<anon>", s->field_count);
+        for (long i = 0; i < s->field_count; i++) {
+            const AstStructField* f = &s->fields[i];
+            print_indent(indent+2);
+            char tbuf[256];
+            const char* tname = prettify_type(f->type_name ? f->type_name : "<type>", tbuf, sizeof(tbuf));
+            if (f->bitwidth > 0) {
+                printf("field type=%s name=%s :%d\n",
+                    tname,
+                    f->name ? f->name : "<anon>",
+                    f->bitwidth);
+            } else {
+                printf("field type=%s name=%s\n",
+                    tname,
+                    f->name ? f->name : "<anon>");
+            }
+            if (f->anon_def) {
+                print_indent(indent+4);
+                printf("inline:\n");
+                ast_print(f->anon_def, indent+6);
+            }
+        }
+        break; }
+
+    case AST_UNION: {
+        const AstUnion* u = (const AstUnion*)n;
+        print_indent(indent);
+        char loc[128]; print_location(n, loc, sizeof(loc));
+        printf("Union name=%s fields=%ld%s\n", u->name ? u->name : "<anon>", u->field_count, loc);
+        for (long i = 0; i < u->field_count; i++) {
+            const AstStructField* f = &u->fields[i];
+            print_indent(indent+2);
+            char tbuf[256];
+            const char* tname = prettify_type(f->type_name ? f->type_name : "<type>", tbuf, sizeof(tbuf));
+            if (f->bitwidth > 0) {
+                printf("field type=%s name=%s :%d\n",
+                    tname,
+                    f->name ? f->name : "<anon>",
+                    f->bitwidth);
+            } else {
+                printf("field type=%s name=%s\n",
+                    tname,
+                    f->name ? f->name : "<anon>");
+            }
+            if (f->anon_def) {
+                print_indent(indent+4);
+                printf("inline:\n");
+                ast_print(f->anon_def, indent+6);
+            }
+        }
+        break; }
+
+    case AST_ENUM: {
+        const AstEnum* e = (const AstEnum*)n;
+        print_indent(indent);
+        char loc[128]; print_location(n, loc, sizeof(loc));
+        printf("Enum name=%s items=%ld%s\n", e->name ? e->name : "<anon>", e->item_count, loc);
+        for (long i = 0; i < e->item_count; i++) {
+            const AstEnumItem* it = &e->items[i];
+            print_indent(indent+2);
+            if (it->value && it->value->kind == AST_EXPR_INT) {
+                typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprInt;
+                long v = ((const AstExprInt*)it->value)->value;
+                printf("%s = %ld\n", it->name ? it->name : "<anon>", v);
+            } else if (it->value) {
+                printf("%s value:\n", it->name ? it->name : "<anon>");
+                ast_print(it->value, indent+4);
+            } else {
+                printf("%s\n", it->name ? it->name : "<anon>");
+            }
+        }
+        break; }
+
+    case AST_TYPEDEF: {
+        typedef struct { AstKind kind; char* type_name; char* alias_name; AstQuals q; int alias_ptrs; } AstTypedef;
+        const AstTypedef* t = (const AstTypedef*)n;
+        print_indent(indent);
+        printf("Typedef type=%s name=%s\n", t->type_name ? t->type_name : "<unknown>", t->alias_name ? t->alias_name : "<anon>");
+        print_indent(indent+2); printf("quals: const_=%d volatile_=%d restrict_=%d uniq_=%d pointer_num=%d fp_=%d ptr_heap=%d ptr_no_dtor=%d ptr_no_heap=%d\n",
+                t->q.const_, t->q.volatile_, t->q.restrict_, t->q.uniq_, t->q.pointer_num, t->q.fp_, t->q.ptr_heap, t->q.ptr_no_dtor, t->q.ptr_no_heap);
+        print_indent(indent+2); printf("alias_pointer_num=%d\n", t->alias_ptrs);
+        print_indent(indent+2); printf("typeinfo: signed=%d unsigned=%d short=%d long=%d long_long=%d void=%d char=%d int=%d float=%d double=%d struct=%d union=%d enum=%d array_dims=%d int_bits=%d\n",
+                t->q.is_signed, t->q.is_unsigned, t->q.is_short, (t->q.long_count>=1), (t->q.long_count>=2),
+                t->q.is_void, t->q.is_char, t->q.is_int, t->q.is_float, t->q.is_double,
+                t->q.is_struct, t->q.is_union, t->q.is_enum, t->q.array_dims, t->q.int_bits);
+        if(t->q.array_dims>0){ print_indent(indent+2); printf("array_sizes="); for(int i=0;i<t->q.array_dims && i<8;i++){ if(i) printf(","); printf("%ld", t->q.array_size[i]); } printf("\n"); }
+        break; }
+    case AST_FUNCTION: {
+        const AstFunction* f = (const AstFunction*)n;
+        print_indent(indent);
+        printf("Function rtype=%s name=%s params=%ld (line %d)\n",
+               f->return_type?f->return_type:"<ret>",
+               f->name?f->name:"<anon>", f->param_count, n->lineno);
+        if(f->version){
+            print_indent(indent+2);
+            printf("version=%d\n", f->version);
+        }
+        if(f->return_type){
+            AstQuals rq; parse_type_details(f->return_type, &rq);
+            print_indent(indent+2);
+            printf("return.quals: const_=%d volatile_=%d restrict_=%d uniq_=%d pointer_num=%d fp_=%d ptr_heap=%d ptr_no_dtor=%d ptr_no_heap=%d\n",
+                   rq.const_, rq.volatile_, rq.restrict_, rq.uniq_, rq.pointer_num, rq.fp_, rq.ptr_heap, rq.ptr_no_dtor, rq.ptr_no_heap);
+            print_indent(indent+2);
+            printf("return.typeinfo: signed=%d unsigned=%d short=%d long=%d long_long=%d void=%d char=%d int=%d float=%d double=%d struct=%d union=%d enum=%d array_dims=%d int_bits=%d\n",
+                   rq.is_signed, rq.is_unsigned, rq.is_short, (rq.long_count>=1), (rq.long_count>=2),
+                   rq.is_void, rq.is_char, rq.is_int, rq.is_float, rq.is_double,
+                   rq.is_struct, rq.is_union, rq.is_enum, rq.array_dims, rq.int_bits);
+            if(rq.array_dims>0){ print_indent(indent+2); printf("return.array_sizes="); for(int i=0;i<rq.array_dims && i<8;i++){ if(i) printf(","); printf("%ld", rq.array_size[i]); } printf("\n"); }
+        }
+        if(f->flags){
+            print_indent(indent+2);
+            printf("flags:");
+            if(f->flags & ASTF_EXTERN) printf(" extern");
+            if(f->flags & ASTF_STATIC) printf(" static");
+            if(f->flags & ASTF_INLINE) printf(" inline");
+            if(f->flags & ASTF_CONST) printf(" const");
+            if(f->flags & ASTF_VOLATILE) printf(" volatile");
+            if(f->flags & ASTF_RESTRICT) printf(" restrict");
+            if(f->flags & ASTF_UNIQ) printf(" uniq");
+            printf("\n");
+        }
+        for(long i=0;i<f->param_count;i++) {
+            const AstParam* p = &f->params[i];
+            print_indent(indent+2);
+            printf("param[%ld]: type=%s name=%s\n", i,
+                   p->type_name ? p->type_name : "<unknown>",
+                   p->name ? p->name : "<anon>");
+            if(p->type_name){
+                AstQuals pq; parse_type_details(p->type_name, &pq);
+                print_indent(indent+4);
+                printf("param.quals: const_=%d volatile_=%d restrict_=%d uniq_=%d pointer_num=%d fp_=%d ptr_heap=%d ptr_no_dtor=%d ptr_no_heap=%d\n",
+                       pq.const_, pq.volatile_, pq.restrict_, pq.uniq_, pq.pointer_num, pq.fp_, pq.ptr_heap, pq.ptr_no_dtor, pq.ptr_no_heap);
+                print_indent(indent+4);
+                printf("param.typeinfo: signed=%d unsigned=%d short=%d long=%d long_long=%d void=%d char=%d int=%d float=%d double=%d struct=%d union=%d enum=%d array_dims=%d int_bits=%d\n",
+                       pq.is_signed, pq.is_unsigned, pq.is_short, (pq.long_count>=1), (pq.long_count>=2),
+                       pq.is_void, pq.is_char, pq.is_int, pq.is_float, pq.is_double,
+                       pq.is_struct, pq.is_union, pq.is_enum, pq.array_dims, pq.int_bits);
+                if(pq.array_dims>0){ print_indent(indent+4); printf("param.array_sizes="); for(int j=0;j<pq.array_dims && j<8;j++){ if(j) printf(","); printf("%ld", pq.array_size[j]); } printf("\n"); }
+            }
+        }
+        ast_print(f->body, indent+2);
+        break; }
+    case AST_RETURN: {
+        print_indent(indent); printf("Return (line %d)\n", n->lineno);
+        const AstNode* expr = ((const AstNode* const*)((const char*)n + sizeof(AstKind)))[0];
+        /* safer: cast to known struct layout */
+        {
+            typedef struct { AstKind kind; AstNode* expr; } AstReturn;
+            const AstReturn* r = (const AstReturn*)n;
+            if(r->expr) ast_print(r->expr, indent+2);
+        }
+        break; }
+    case AST_EXPR_INT: {
+        typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprInt;
+        const AstExprInt* e = (const AstExprInt*)n;
+        print_indent(indent); printf("Int(%ld) (line %d)\n", e->value, n->lineno);
+        break; }
+    case AST_EXPR_BINARY: {
+        typedef struct { AstKind kind; char* op; AstNode* lhs; AstNode* rhs; } AstExprBinary;
+        const AstExprBinary* e = (const AstExprBinary*)n;
+        print_indent(indent); printf("Binary(op=%s) (line %d)\n", e->op ? e->op : "?", n->lineno);
+        if(e->lhs) ast_print(e->lhs, indent+2);
+        if(e->rhs) ast_print(e->rhs, indent+2);
+        break; }
+    case AST_EXPR_IDENT: {
+        typedef struct { AstKind kind; char* name; } AstExprIdent;
+        const AstExprIdent* e = (const AstExprIdent*)n;
+        print_indent(indent); printf("Ident(%s) (line %d)\n", e->name ? e->name : "<anon>", n->lineno);
+        break; }
+    case AST_DECL: {
+        typedef struct { AstKind kind; char* type_name; char* name; AstNode* init; AstNode* anon_def; AstQuals q; } AstDecl;
+        const AstDecl* d = (const AstDecl*)n;
+        print_indent(indent);
+        printf("Decl type=%s name=%s (line %d)\n", d->type_name?d->type_name:"<type>", d->name?d->name:"<anon>", n->lineno);
+        print_indent(indent+2); printf("quals: const_=%d volatile_=%d restrict_=%d uniq_=%d pointer_num=%d fp_=%d ptr_heap=%d ptr_no_dtor=%d ptr_no_heap=%d\n",
+                d->q.const_, d->q.volatile_, d->q.restrict_, d->q.uniq_, d->q.pointer_num, d->q.fp_, d->q.ptr_heap, d->q.ptr_no_dtor, d->q.ptr_no_heap);
+        print_indent(indent+2); printf("typeinfo: signed=%d unsigned=%d short=%d long=%d long_long=%d void=%d char=%d int=%d float=%d double=%d struct=%d union=%d enum=%d array_dims=%d int_bits=%d\n",
+                d->q.is_signed, d->q.is_unsigned, d->q.is_short, (d->q.long_count>=1), (d->q.long_count>=2),
+                d->q.is_void, d->q.is_char, d->q.is_int, d->q.is_float, d->q.is_double,
+                d->q.is_struct, d->q.is_union, d->q.is_enum, d->q.array_dims, d->q.int_bits);
+        if(d->q.array_dims>0){ print_indent(indent+2); printf("array_sizes="); for(int i=0;i<d->q.array_dims && i<8;i++){ if(i) printf(","); printf("%ld", d->q.array_size[i]); } printf("\n"); }
+        if(d->anon_def) { print_indent(indent+2); printf("inline:\n"); ast_print(d->anon_def, indent+4); }
+        if(d->init) { print_indent(indent+2); printf("init:\n"); ast_print(d->init, indent+4); }
+        break; }
+    case AST_EXPR_UNARY: {
+        typedef struct { AstKind kind; char* op; AstNode* expr; int is_postfix; } AstExprUnary;
+        const AstExprUnary* e = (const AstExprUnary*)n;
+        print_indent(indent); printf("Unary(%s%s)\n", e->is_postfix?"post":"pre", e->op?e->op:"");
+        if(e->expr) ast_print(e->expr, indent+2);
+        break; }
+    case AST_EXPR_CALL: {
+        typedef struct { AstKind kind; AstNode* callee; AstNode** args; long argc; } AstExprCall;
+        const AstExprCall* e = (const AstExprCall*)n;
+        print_indent(indent); printf("Call(argc=%ld)\n", e->argc);
+        if(e->callee) { print_indent(indent+2); printf("callee:\n"); ast_print(e->callee, indent+4); }
+        for(long i=0;i<e->argc;i++) {
+            print_indent(indent+2); printf("arg[%ld]:\n", i);
+            ast_print(e->args[i], indent+4);
+        }
+        break; }
+    case AST_EXPR_COND: {
+        typedef struct { AstKind kind; AstNode* cond; AstNode* then_e; AstNode* else_e; } AstExprCond;
+        const AstExprCond* e = (const AstExprCond*)n;
+        print_indent(indent); printf("Cond\n");
+        if(e->cond){ print_indent(indent+2); printf("cond:\n"); ast_print(e->cond, indent+4);} 
+        if(e->then_e){ print_indent(indent+2); printf("then:\n"); ast_print(e->then_e, indent+4);} 
+        if(e->else_e){ print_indent(indent+2); printf("else:\n"); ast_print(e->else_e, indent+4);} 
+        break; }
+    case AST_EXPR_INDEX: {
+        typedef struct { AstKind kind; AstNode* arr; AstNode* index; } AstExprIndex;
+        const AstExprIndex* e = (const AstExprIndex*)n;
+        print_indent(indent); printf("Index\n");
+        if(e->arr) ast_print(e->arr, indent+2);
+        if(e->index) ast_print(e->index, indent+2);
+        break; }
+    case AST_EXPR_MEMBER: {
+        typedef struct { AstKind kind; AstNode* recv; char* name; int is_arrow; } AstExprMember;
+        const AstExprMember* e = (const AstExprMember*)n;
+        print_indent(indent); printf("Member(%s%s) (line %d)\n", e->is_arrow?"->":".", e->name?e->name:"<anon>", n->lineno);
+        if(e->recv) ast_print(e->recv, indent+2);
+        break; }
+    case AST_INIT_LIST: {
+        typedef struct { AstKind kind; AstNode** items; long count; } AstInitList;
+        const AstInitList* il = (const AstInitList*)n;
+        print_indent(indent); printf("InitList{n=%ld}\n", il->count);
+        for(long i=0;i<il->count;i++) ast_print(il->items[i], indent+2);
+        break; }
+    case AST_INIT_DESIG_FIELD: {
+        typedef struct { AstKind kind; char* name; AstNode* value; } AstInitDesigField;
+        const AstInitDesigField* d = (const AstInitDesigField*)n;
+        print_indent(indent); printf("Designated(.%s)\n", d->name?d->name:"<field>");
+        if(d->value) ast_print(d->value, indent+2);
+        break; }
+    case AST_INIT_DESIG_INDEX: {
+        typedef struct { AstKind kind; AstNode* index_expr; AstNode* value; } AstInitDesigIndex;
+        const AstInitDesigIndex* d = (const AstInitDesigIndex*)n;
+        print_indent(indent); printf("Designated([index])\n");
+        if(d->index_expr) { print_indent(indent+2); printf("index:\n"); ast_print(d->index_expr, indent+4); }
+        if(d->value) { print_indent(indent+2); printf("value:\n"); ast_print(d->value, indent+4); }
+        break; }
+    case AST_DESIG_FIELD: {
+        typedef struct { AstKind kind; char* name; } AstDesigField;
+        const AstDesigField* e = (const AstDesigField*)n;
+        print_indent(indent); printf(".\n");
+        if(e->name) { print_indent(indent+2); printf("field=%s\n", e->name); }
+        break; }
+    case AST_DESIG_INDEX: {
+        typedef struct { AstKind kind; AstNode* index_expr; } AstDesigIndex;
+        const AstDesigIndex* e = (const AstDesigIndex*)n;
+        print_indent(indent); printf("[index]\n");
+        if(e->index_expr) ast_print(e->index_expr, indent+2);
+        break; }
+    case AST_DESIG_RANGE: {
+        typedef struct { AstKind kind; AstNode* first; AstNode* last; } AstDesigRange;
+        const AstDesigRange* e = (const AstDesigRange*)n;
+        print_indent(indent); printf("[range]\n");
+        if(e->first) { print_indent(indent+2); printf("first:\n"); ast_print(e->first, indent+4); }
+        if(e->last) { print_indent(indent+2); printf("last:\n"); ast_print(e->last, indent+4); }
+        break; }
+    case AST_INIT_DESIG: {
+        typedef struct { AstKind kind; AstNode** elems; long count; AstNode* value; } AstInitDesigChain;
+        const AstInitDesigChain* c = (const AstInitDesigChain*)n;
+        print_indent(indent); printf("DesignatedChain{n=%ld}\n", c->count);
+        for(long i=0;i<c->count;i++) ast_print(c->elems[i], indent+2);
+        if(c->value) { print_indent(indent+2); printf("value:\n"); ast_print(c->value, indent+4); }
+        break; }
+    case AST_EXPR_ASSIGN: {
+        typedef struct { AstKind kind; char* op; AstNode* lhs; AstNode* rhs; } AstExprAssign;
+        const AstExprAssign* e = (const AstExprAssign*)n;
+        print_indent(indent); printf("Assign(op=%s) (line %d)\n", e->op?e->op:"=", n->lineno);
         if(e->lhs) ast_print(e->lhs, indent+2);
         if(e->rhs) ast_print(e->rhs, indent+2);
         break; }
@@ -990,7 +1464,7 @@ static int validate_init_rec(const AstNode* init, const long* dims, int ndims, i
                 if(e->kind==AST_DESIG_INDEX){
                     typedef struct { AstKind kind; AstNode* index_expr; } AstDesigIndex; const AstDesigIndex* di=(const AstDesigIndex*)e;
                     if(di->index_expr && di->index_expr->kind==AST_EXPR_INT){
-                        typedef struct { AstKind kind; long value; } AstExprInt; const AstExprInt* iv=(const AstExprInt*)di->index_expr;
+                        typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprInt; const AstExprInt* iv=(const AstExprInt*)di->index_expr;
                         if(iv->value<0 || (dim0>0 && iv->value>=dim0)){
                             fprintf(stderr, "error: designated index %ld out of bounds of %ld\n", iv->value, dim0);
                             ok=0;
@@ -999,8 +1473,8 @@ static int validate_init_rec(const AstNode* init, const long* dims, int ndims, i
                     k++;
                 } else if(e->kind==AST_DESIG_RANGE){
                     typedef struct { AstKind kind; AstNode* first; AstNode* last; } AstDesigRange; const AstDesigRange* dr=(const AstDesigRange*)e;
-                    long a=-1,b=-1; if(dr->first && dr->first->kind==AST_EXPR_INT){ typedef struct { AstKind kind; long value; } AstExprInt; a=((const AstExprInt*)dr->first)->value; }
-                    if(dr->last && dr->last->kind==AST_EXPR_INT){ typedef struct { AstKind kind; long value; } AstExprInt; b=((const AstExprInt*)dr->last)->value; }
+                    long a=-1,b=-1; if(dr->first && dr->first->kind==AST_EXPR_INT){ typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprInt; a=((const AstExprInt*)dr->first)->value; }
+                    if(dr->last && dr->last->kind==AST_EXPR_INT){ typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprInt; b=((const AstExprInt*)dr->last)->value; }
                     if(a<0||b<0||a>b||(dim0>0 && b>=dim0)){
                         fprintf(stderr, "error: designated range invalid [%ld..%ld] for dim %ld\n", a,b,dim0);
                         ok=0;
@@ -1015,7 +1489,7 @@ static int validate_init_rec(const AstNode* init, const long* dims, int ndims, i
             return ok;
         } else {
             typedef struct { AstKind kind; AstNode* index_expr; AstNode* value; } AstInitDesigIndex; const AstInitDesigIndex* di=(const AstInitDesigIndex*)init;
-            long v=-1; if(di->index_expr && di->index_expr->kind==AST_EXPR_INT){ typedef struct { AstKind kind; long value; } AstExprInt; v=((const AstExprInt*)di->index_expr)->value; }
+            long v=-1; if(di->index_expr && di->index_expr->kind==AST_EXPR_INT){ typedef struct { AstKind kind; int lineno; char* filename; long value; } AstExprInt; v=((const AstExprInt*)di->index_expr)->value; }
             if(v<0 || (dims[0]>0 && v>=dims[0])){ fprintf(stderr, "error: designated index %ld out of bounds of %ld\n", v, dims[0]); }
             return validate_init_rec(di->value, dims+1, ndims-1, depth+1);
         }

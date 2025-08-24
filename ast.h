@@ -36,10 +36,14 @@ typedef enum AstKind {
 
 typedef struct AstNode {
     AstKind kind;
+    int lineno;    /* source line number */
+    char* filename; /* source filename */
 } AstNode;
 
 typedef struct AstCompound {
     AstKind kind; /* AST_COMPOUND */
+    int lineno;         /* source line number */
+    char* filename;     /* source filename */
     struct AstNode** items; /* statements */
     long count;
 } AstCompound;
@@ -51,6 +55,8 @@ typedef struct AstParam {
 
 typedef struct AstFunction {
     AstKind kind; /* AST_FUNCTION */
+    int lineno;         /* source line number */
+    char* filename;     /* source filename */
     char* name;
     char* return_type; /* e.g., "int", "char*" */
     int flags; /* AstFuncFlags bitmask */
@@ -79,15 +85,19 @@ typedef struct AstStructField {
 } AstStructField;
 
 typedef struct AstStruct {
-    AstKind kind;   // AST_STRUCT
-    char* name;     // "Point"
+    AstKind kind;       // AST_STRUCT
+    int lineno;         // source line number
+    char* filename;     // source filename
+    char* name;         // "Point"
     AstStructField* fields;
     long field_count;
 } AstStruct;
 
 typedef struct AstUnion {
-    AstKind kind;   // AST_UNION
-    char* name;     // union tag name
+    AstKind kind;       // AST_UNION
+    int lineno;         // source line number
+    char* filename;     // source filename
+    char* name;         // union tag name
     AstStructField* fields;
     long field_count;
 } AstUnion;
@@ -98,8 +108,10 @@ typedef struct AstEnumItem {
 } AstEnumItem;
 
 typedef struct AstEnum {
-    AstKind kind;   // AST_ENUM
-    char* name;     // enum tag name (nullable for anonymous)
+    AstKind kind;       // AST_ENUM
+    int lineno;         // source line number
+    char* filename;     // source filename
+    char* name;         // enum tag name (nullable for anonymous)
     AstEnumItem* items;
     long item_count;
 } AstEnum;
@@ -183,6 +195,11 @@ void ast_decl_attach_anon(struct AstNode* decl, struct AstNode* anon_def);
 
 /* Clone a type definition node (struct/union/enum) for safe inline attachment */
 struct AstNode* ast_type_clone(const struct AstNode* n);
+AstNode* ast_node_clone(const AstNode* src);
+
+/* Filename tracking for preprocessor directives */
+void ast_set_filename(const char* filename);
+
 AstNode* ast_init_list_new(struct AstNode** items, long count);
 AstNode* ast_init_desig_field_new(const char* name, struct AstNode* value);
 AstNode* ast_init_desig_index_new(struct AstNode* index_expr, struct AstNode* value);

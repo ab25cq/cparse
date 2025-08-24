@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include "parser.h"
 #include "typedefs.h"
+#include "ast.h"
 
 static char* strndup0(const char* s, size_t n) {
   char* r = (char*)malloc(n+1);
@@ -35,7 +36,16 @@ FP_HEX      0[xX]([0-9A-Fa-f]*\.[0-9A-Fa-f]+|[0-9A-Fa-f]+\.[0-9A-Fa-f]*)([pP][+-
 {WS}                        ;
 "//"[^\n]*                  ;
 "/*"([^*]|\*+[^*/])*"*/"      ;
-"#"[^\n]*                   ;
+^#[ \t]*[0-9]+[ \t]+\"[^\"]*\".*\n {
+  /* Handle #line directives like: # 42 "filename.c" */
+  int linenum;
+  char filename[256];
+  if (sscanf(yytext, "# %d \"%255[^\"]\"", &linenum, filename) == 2) {
+    yylineno = linenum - 1; /* yylineno will be incremented after this line */
+    ast_set_filename(filename);
+  }
+}
+"#"[^\n]*                   ; /* Skip other preprocessor directives */
 
 "void"                     return KW_VOID;
 "char"                     return KW_CHAR;
