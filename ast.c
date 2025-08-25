@@ -880,8 +880,10 @@ void ast_print(const AstNode* n, int indent)
         for(long i=0;i<f->param_count;i++) {
             const AstParam* p = &f->params[i];
             print_indent(indent+2);
+            char tbuf[256];
+            const char* tname = prettify_type(p->type_name ? p->type_name : "<type>", tbuf, sizeof(tbuf));
             printf("param[%ld]: type=%s name=%s\n", i,
-                   p->type_name ? p->type_name : "<unknown>",
+                   tname,
                    p->name ? p->name : "<anon>");
             if(p->type_name){
                 AstQuals pq; parse_type_details(p->type_name, &pq);
@@ -1201,8 +1203,10 @@ void ast_compile(const AstNode* n, int indent)
         for(long i=0;i<f->param_count;i++) {
             const AstParam* p = &f->params[i];
             print_indent(indent+2);
+            char tbuf[256];
+            const char* tname = prettify_type(p->type_name ? p->type_name : "<type>", tbuf, sizeof(tbuf));
             printf("param[%ld]: type=%s name=%s\n", i,
-                   p->type_name ? p->type_name : "<unknown>",
+                   tname,
                    p->name ? p->name : "<anon>");
             if(p->type_name){
                 AstQuals pq; parse_type_details(p->type_name, &pq);
