@@ -1440,6 +1440,7 @@ iteration_statement
 
 jump_statement
   : KW_RETURN expression_opt ';'     { $$ = ast_return_new($2); }
+  | KW_RETURN expression_opt         { $$ = ast_return_new($2); }
   | KW_BREAK ';'                     { $$ = NULL; }
   | KW_CONTINUE ';'                  { $$ = NULL; }
   | KW_GOTO IDENTIFIER ';'           { free($2); $$ = NULL; }
