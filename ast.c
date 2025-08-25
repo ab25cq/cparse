@@ -335,7 +335,6 @@ AstNode* ast_typedef_new(const char* type_name, const char* alias_name, int alia
 
 AstNode* ast_decl_new(const char* type_name, const char* name, AstNode* init)
 {
-    typedef struct AstDecl { AstKind kind; char* type_name; char* name; AstNode* init; AstNode* anon_def; AstQuals q; } AstDecl;
     AstDecl* d = (AstDecl*)calloc(1, sizeof(AstDecl));
     if(!d) return NULL;
     d->kind = AST_DECL;
@@ -351,7 +350,6 @@ AstNode* ast_decl_new(const char* type_name, const char* name, AstNode* init)
 void ast_decl_attach_anon(struct AstNode* decl, struct AstNode* anon_def)
 {
     if(!decl || !anon_def) return;
-    typedef struct AstDecl { AstKind kind; char* type_name; char* name; AstNode* init; AstNode* anon_def; } AstDecl;
     AstDecl* d = (AstDecl*)decl;
     d->anon_def = anon_def;
 }
@@ -924,7 +922,6 @@ void ast_print(const AstNode* n, int indent)
         print_indent(indent); printf("Ident(%s) (line %d)\n", e->name ? e->name : "<anon>", n->lineno);
         break; }
     case AST_DECL: {
-        typedef struct { AstKind kind; char* type_name; char* name; AstNode* init; AstNode* anon_def; AstQuals q; } AstDecl;
         const AstDecl* d = (const AstDecl*)n;
         print_indent(indent);
         char tbuf[256];
@@ -1250,7 +1247,6 @@ void ast_compile(const AstNode* n, int indent)
         print_indent(indent); printf("Ident(%s) (line %d)\n", e->name ? e->name : "<anon>", n->lineno);
         break; }
     case AST_DECL: {
-        typedef struct { AstKind kind; char* type_name; char* name; AstNode* init; AstNode* anon_def; AstQuals q; } AstDecl;
         const AstDecl* d = (const AstDecl*)n;
         print_indent(indent);
         printf("Decl type=%s name=%s (line %d)\n", d->type_name?d->type_name:"<type>", d->name?d->name:"<anon>", n->lineno);
@@ -1505,7 +1501,6 @@ void ast_validate(void)
         const AstNode* n=g_nodes.data[i];
         if(!n) continue;
         if(n->kind==AST_DECL){
-            typedef struct { AstKind kind; char* type_name; char* name; AstNode* init; AstNode* anon_def; } AstDecl;
             const AstDecl* d=(const AstDecl*)n;
             long dims[8]={0}; int nd=parse_dims(d->type_name?d->type_name:"", dims, 8);
             if(nd>0){ (void)validate_init_rec(d->init, dims, nd, 0); }
@@ -1743,12 +1738,12 @@ static void ast_free_node(AstNode* n) {
         free(t);
         break; }
     case AST_DECL: {
-        typedef struct AstDecl { AstKind kind; char* type_name; char* name; AstNode* init; AstNode* anon_def; AstQuals q; } AstDecl;
         AstDecl* d = (AstDecl*)n;
         free(d->type_name);
         free(d->name);
         if(d->anon_def) ast_free_node(d->anon_def);
         if(d->init) ast_free_node(d->init);
+        free(d->filename);
         free(d);
         break; }
     default:
