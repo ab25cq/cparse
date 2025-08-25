@@ -1,0 +1,11 @@
+rm -f parser.c parser.h parser.output lexer.c cparse *.o
+[Bison] c.y -> parser.c, parser.h
+bison -d -v --defines=parser.h -o parser.c c.y
+cc -O2 -g -Wall -Wextra -DYYDEBUG -I/opt/homebrew/opt/openjdk/include  -c -o parser.o parser.c
+[Flex ] c.l -> lexer.c
+flex -o lexer.c c.l
+cc -O2 -g -Wall -Wextra -DYYDEBUG -I/opt/homebrew/opt/openjdk/include  -c -o lexer.o lexer.c
+cc -O2 -g -Wall -Wextra -DYYDEBUG -I/opt/homebrew/opt/openjdk/include  -c -o main.o main.c
+cc -O2 -g -Wall -Wextra -DYYDEBUG -I/opt/homebrew/opt/openjdk/include  -c -o ast.o ast.c
+cc -O2 -g -Wall -Wextra -DYYDEBUG -I/opt/homebrew/opt/openjdk/include  -c -o typedefs_impl.o typedefs_impl.c
+cc -O2 -g -Wall -Wextra -DYYDEBUG -o cparse parser.o lexer.o main.o ast.o typedefs_impl.o
