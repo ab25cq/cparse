@@ -144,6 +144,18 @@ typedef struct AstQuals {
     int int_bits;     /* inferred integer bit width (LP64 assumption), 0 if non-integer */
 } AstQuals;
 
+/* Declaration node */
+typedef struct AstDecl {
+    AstKind kind;
+    int lineno;         /* source line number */
+    char* filename;     /* source filename */
+    char* type_name;    /* e.g., "int", "char**" */
+    char* name;         /* declarator name */
+    struct AstNode* init;      /* optional initializer */
+    struct AstNode* anon_def;  /* inline struct/union/enum definition */
+    AstQuals q;                 /* parsed qualifiers */
+} AstDecl;
+
 struct AstNode* ast_struct_new(const char* name);
 struct AstNode* ast_struct_new_with(const char* name, AstStructField* fields, long field_count);
 AstStructField  ast_struct_field_new(const char* type_name, const char* name, int bitwidth);
